@@ -16,7 +16,9 @@ importScripts(
   '../engine/network-logger.js',
   '../engine/dynamic-filtering.js',
   '../engine/redirect-adapter.js',
-  '../engine/adnauseam-adapter.js'
+  '../engine/adnauseam-adapter.js',
+  '../engine/doh-cname-resolver.js',
+  '../engine/community-reports.js'
 );
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -126,6 +128,16 @@ function initFilterSystem(isFirstInstall) {
   // Initialize AdNauseam adapter (off by default, user opts in)
   if (typeof UBAdNauseam !== 'undefined') {
     UBAdNauseam.init();
+  }
+
+  // Initialize DoH CNAME resolver
+  if (typeof UBCnameResolver !== 'undefined') {
+    UBCnameResolver.init();
+  }
+
+  // Initialize Community Reports
+  if (typeof UBCommunityReports !== 'undefined') {
+    UBCommunityReports.init();
   }
 
   UBListManager.init().then(function() {
@@ -895,6 +907,105 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
       chrome.storage.local.set({ ub_statistics: stats, ub_hourly_stats: hourly });
       sendResponse({ success: true });
     });
+    return true;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  CNAME DoH RESOLUTION
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'checkCNAME') {
+    if (typeof UBCnameResolver !== 'undefined') {
+      UBCnameResolver.checkHostname(msg.hostname).then(function(result) {
+        sendResponse(result);
+      }).catch(function() {
+        sendResponse({ isTracker: false, cname: null, trackerDomain: null });
+      });
+    } else {
+      sendResponse({ isTracker: false, cname: null, trackerDomain: null });
+    }
+    return true;
+  }
+
+  if (msg.action === 'checkCNAMEBatch') {
+    if (typeof UBCnameResolver !== 'undefined') {
+      UBCnameResolver.checkBatch(msg.hostnames || []).then(function(results) {
+        sendResponse({ results: results });
+      }).catch(function() {
+        sendResponse({ results: {} });
+      });
+    } else {
+      sendResponse({ results: {} });
+    }
+    return true;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  COMMUNITY REPORTS
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'submitReport') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      UBCommunityReports.submitReport(msg.report).then(function(result) {
+        sendResponse(result);
+      }).catch(function(e) {
+        sendResponse({ success: false, error: e.message });
+      });
+    } else {
+      sendResponse({ success: false, error: 'module not loaded' });
+    }
+    return true;
+  }
+
+  if (msg.action === 'getReports') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      var reports = UBCommunityReports.getReports(msg.filter || null);
+      sendResponse({ reports: reports });
+    } else {
+      sendResponse({ reports: [] });
+    }
+    return false;
+  }
+
+  if (msg.action === 'deleteReport') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      UBCommunityReports.deleteReport(msg.id).then(function() {
+        sendResponse({ success: true });
+      });
+    } else {
+      sendResponse({ success: false });
+    }
+    return true;
+  }
+
+  if (msg.action === 'submitAllReports') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      UBCommunityReports.submitAllPending().then(function(result) {
+        sendResponse(result);
+      });
+    } else {
+      sendResponse({ submitted: 0 });
+    }
+    return true;
+  }
+
+  if (msg.action === 'getReportSettings') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      sendResponse(UBCommunityReports.getSettings());
+    } else {
+      sendResponse({});
+    }
+    return false;
+  }
+
+  if (msg.action === 'updateReportSettings') {
+    if (typeof UBCommunityReports !== 'undefined') {
+      UBCommunityReports.updateSettings(msg.settings).then(function() {
+        sendResponse({ success: true });
+      });
+    } else {
+      sendResponse({ success: false });
+    }
     return true;
   }
 

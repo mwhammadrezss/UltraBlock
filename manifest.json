@@ -81,7 +81,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content/removeparam.js", "src/content/element-picker.js", "src/content/epicker-full.js", "src/content/procedural-cosmetic.js", "src/content/adnauseam-detector.js"],
+      "js": ["src/content/removeparam.js", "src/content/element-picker.js", "src/content/epicker-full.js", "src/content/procedural-cosmetic.js", "src/content/adnauseam-detector.js", "src/content/perceptual-ad-detection.js"],
       "run_at": "document_end",
       "all_frames": false
     },

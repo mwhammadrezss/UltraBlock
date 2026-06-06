@@ -12,7 +12,9 @@ importScripts(
   '../filterlist/list-manager.js',
   '../filterlist/filter-compiler.js',
   '../engine/scriptlet-engine.js',
-  '../engine/scriptlet-registry.js'
+  '../engine/scriptlet-registry.js',
+  '../engine/network-logger.js',
+  '../engine/dynamic-filtering.js'
 );
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -100,6 +102,13 @@ function initFilterSystem(isFirstInstall) {
   if (typeof UBScriptletEngine !== 'undefined') {
     UBScriptletEngine.loadStoredRules().then(function(count) {
       if (count > 0) console.log('[UltraBlock] Restored ' + count + ' scriptlet rules from storage');
+    });
+  }
+
+  // Initialize dynamic filtering
+  if (typeof UBDynamicFiltering !== 'undefined') {
+    UBDynamicFiltering.init().then(function() {
+      console.log('[UltraBlock] Dynamic filtering initialized');
     });
   }
 
@@ -564,6 +573,124 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
     recompileFilters();
     sendResponse({ success: true });
     return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  ELEMENT PICKER
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'activateElementPicker') {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'activateElementPicker' });
+      }
+    });
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (msg.action === 'addCustomFilter') {
+    // Store user-created cosmetic filter
+    chrome.storage.local.get(['ub_custom_filters']).then(function(data) {
+      var filters = data.ub_custom_filters || [];
+      filters.push({
+        filter: msg.filter,
+        selector: msg.selector,
+        hostname: msg.hostname,
+        created: Date.now()
+      });
+      return chrome.storage.local.set({ ub_custom_filters: filters });
+    }).then(function() {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (msg.action === 'getCustomFilters') {
+    chrome.storage.local.get(['ub_custom_filters']).then(function(data) {
+      sendResponse({ filters: data.ub_custom_filters || [] });
+    });
+    return true;
+  }
+
+  if (msg.action === 'removeCustomFilter') {
+    chrome.storage.local.get(['ub_custom_filters']).then(function(data) {
+      var filters = (data.ub_custom_filters || []).filter(function(f) {
+        return f.filter !== msg.filter;
+      });
+      return chrome.storage.local.set({ ub_custom_filters: filters });
+    }).then(function() {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  NETWORK LOGGER
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'enableNetworkLogger') {
+    UBNetworkLogger.enable();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (msg.action === 'disableNetworkLogger') {
+    UBNetworkLogger.disable();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (msg.action === 'getNetworkLog') {
+    sendResponse({
+      enabled: UBNetworkLogger.isEnabled(),
+      entries: UBNetworkLogger.getEntries(msg.filter),
+      stats: UBNetworkLogger.getStats()
+    });
+    return false;
+  }
+
+  if (msg.action === 'clearNetworkLog') {
+    UBNetworkLogger.clear();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  DYNAMIC FILTERING
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'getDynamicRules') {
+    var siteRules = msg.hostname
+      ? UBDynamicFiltering.getRulesForSite(msg.hostname)
+      : UBDynamicFiltering.getRules();
+    sendResponse({ rules: siteRules });
+    return false;
+  }
+
+  if (msg.action === 'setDynamicRule') {
+    UBDynamicFiltering.setRule(msg.from, msg.to, msg.type, msg.ruleAction).then(function() {
+      sendResponse({ success: true });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  if (msg.action === 'removeDynamicRule') {
+    UBDynamicFiltering.removeRule(msg.from, msg.to, msg.type).then(function() {
+      sendResponse({ success: true });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  if (msg.action === 'clearDynamicRules') {
+    UBDynamicFiltering.clearAll().then(function() {
+      sendResponse({ success: true });
+    });
+    return true;
   }
 
   return false;

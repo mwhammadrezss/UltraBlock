@@ -59,7 +59,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content/removeparam.js"],
+      "js": ["src/content/removeparam.js", "src/content/element-picker.js", "src/content/procedural-cosmetic.js"],
       "run_at": "document_end",
       "all_frames": false
     },

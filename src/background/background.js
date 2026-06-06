@@ -10,7 +10,9 @@
 // ── Import filter system modules ────────────────────────────────────────
 importScripts(
   '../filterlist/list-manager.js',
-  '../filterlist/filter-compiler.js'
+  '../filterlist/filter-compiler.js',
+  '../engine/scriptlet-engine.js',
+  '../engine/scriptlet-registry.js'
 );
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -94,6 +96,13 @@ chrome.runtime.onStartup.addListener(function() {
 //  2b. FILTER LIST SYSTEM INITIALIZATION
 // ══════════════════════════════════════════════════════════════════════════
 function initFilterSystem(isFirstInstall) {
+  // Load stored scriptlet rules immediately (fast path for SW restart)
+  if (typeof UBScriptletEngine !== 'undefined') {
+    UBScriptletEngine.loadStoredRules().then(function(count) {
+      if (count > 0) console.log('[UltraBlock] Restored ' + count + ' scriptlet rules from storage');
+    });
+  }
+
   UBListManager.init().then(function() {
     console.log('[UltraBlock] Filter list manager initialized');
 
@@ -132,7 +141,11 @@ function recompileFilters() {
       console.log('[UltraBlock] No filter text to compile');
       return;
     }
-    return UBFilterCompiler.compileAndApply(text);
+    // Compile network rules
+    var rulePromise = UBFilterCompiler.compileAndApply(text);
+    // Compile scriptlet rules
+    UBScriptletEngine.compileScriptletRules(text);
+    return rulePromise;
   }).then(function(result) {
     if (result) {
       console.log('[UltraBlock] Filters compiled: ' + result.ruleCount + ' rules');
@@ -141,6 +154,19 @@ function recompileFilters() {
     console.error('[UltraBlock] Filter compilation error:', e);
   });
 }
+
+// ── Scriptlet injection on navigation ──────────────────────────────────
+chrome.webNavigation.onCommitted.addListener(function(details) {
+  if (details.frameId !== 0) return;
+  var hostname = '';
+  try { hostname = new URL(details.url).hostname; } catch (_) {}
+  if (!hostname) return;
+  // Skip chrome://, edge://, about: pages
+  if (details.url.indexOf('chrome') === 0 || details.url.indexOf('about:') === 0) return;
+  if (typeof UBScriptletEngine !== 'undefined') {
+    UBScriptletEngine.injectForTab(details.tabId, hostname, details.frameId);
+  }
+});
 
 
 // ══════════════════════════════════════════════════════════════════════════

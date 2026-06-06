@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "UltraBlock — Ultimate Ad Blocker",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Stealth-grade ad blocker with Cookie Negotiator, Dark Pattern Neutralizer, Dopamine Detox, Tracker Poisoning, and Retro Mode.",
 
   "permissions": [
@@ -18,47 +18,53 @@
   "host_permissions": ["<all_urls>"],
 
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/background.js"
   },
 
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["stealth.js"],
+      "js": ["src/content/stealth.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["tracker-poison.js"],
+      "js": ["src/content/tracker-poison.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": false
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["inject.js"],
+      "js": ["src/content/inject.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js", "cookie-negotiator.js", "dark-patterns.js", "dopamine-detox.js", "retro-mode.js"],
-      "css": ["cosmetic.css"],
+      "js": [
+        "src/content/content.js",
+        "src/content/cookie-negotiator.js",
+        "src/content/dark-patterns.js",
+        "src/content/dopamine-detox.js",
+        "src/content/retro-mode.js"
+      ],
+      "css": ["src/styles/cosmetic.css"],
       "run_at": "document_start",
       "all_frames": true
     },
     {
       "matches": ["*://*.youtube.com/*", "*://youtube.com/*"],
-      "js": ["youtube.js", "video-patch.js"],
+      "js": ["src/content/youtube.js", "src/content/video-patch.js"],
       "run_at": "document_start",
       "all_frames": false
     },
     {
       "matches": ["*://*.twitch.tv/*", "*://twitch.tv/*"],
-      "js": ["video-patch.js"],
+      "js": ["src/content/video-patch.js"],
       "run_at": "document_start",
       "all_frames": false
     }
@@ -66,31 +72,15 @@
 
   "declarative_net_request": {
     "rule_resources": [
-      {
-        "id": "ad_networks",
-        "enabled": true,
-        "path": "rules/ad_networks.json"
-      },
-      {
-        "id": "trackers",
-        "enabled": true,
-        "path": "rules/trackers.json"
-      },
-      {
-        "id": "malware",
-        "enabled": true,
-        "path": "rules/malware.json"
-      },
-      {
-        "id": "annoyances",
-        "enabled": true,
-        "path": "rules/annoyances.json"
-      }
+      { "id": "ad_networks", "enabled": true, "path": "rules/ad_networks.json" },
+      { "id": "trackers",    "enabled": true, "path": "rules/trackers.json"    },
+      { "id": "malware",     "enabled": true, "path": "rules/malware.json"     },
+      { "id": "annoyances",  "enabled": true, "path": "rules/annoyances.json"  }
     ]
   },
 
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_icon": {
       "16":  "icons/icon16.png",
       "32":  "icons/icon32.png",

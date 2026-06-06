@@ -374,6 +374,281 @@ youtube.com * 3p block  ← همه 3rd-party ریکوئست‌ها بلاک فق
 
 ---
 
+---
+
+## 🆕 ویژگی‌های اضافی که از دست رفته بودن
+
+---
+
+### 2️⃣1️⃣ $removeparam — حذف پارامترهای ترکینگ از URL
+**📌 منبع:** uBlock Origin, AdGuard
+
+**چیه؟**
+قبل از لود شدن صفحه، پارامترهای tracking رو از URL حذف می‌کنه:
+```
+*$removeparam=fbclid
+*$removeparam=gclid
+*$removeparam=/^utm_/
+*$removeparam=igshid
+*$removeparam=mc_cid
+*$removeparam=yclid
+*$removeparam=_openstat
+```
+
+**نتیجه:** URL تمیز، بدون ردیابی، بدون شکستن سایت
+
+**تو نداریش.** tracker-poison.js فقط fingerprint رو noise می‌ده ولی URL tracking params هنوز هستن.
+
+---
+
+### 2️⃣2️⃣ $redirect / Resource Replacement — جایگزینی منابع
+**📌 منبع:** uBlock Origin, AdGuard, Brave
+
+**چیه؟**
+به جای block کردن یه resource (که ممکنه سایت بشکنه)، با یه **نسخه خنثی‌شده** جایگزین می‌کنه:
+
+```
+||googletagmanager.com/gtag/js$redirect=googletagmanager_gtm.js
+||google-analytics.com/analytics.js$redirect=google-analytics_analytics.js
+||facebook.net/en_US/fbevents.js$redirect=facebook_sdk.js
+```
+
+**نسخه خنثی‌شده (neutered):** ظاهراً لود می‌شه و function‌ها وجود دارن، ولی هیچ data ارسال نمی‌شه.
+
+**uBlock Origin ۱۰۰+ redirect resource داره:**
+- `noop.js` — اسکریپت خالی
+- `noop.txt` — فایل متنی خالی  
+- `1x1.gif` — تصویر ۱x۱ شفاف
+- `2x2.png` — تصویر ۲x۲ شفاف
+- `noop.html` — صفحه HTML خالی
+- `noopframe.html` — iframe خالی
+- `google-analytics_analytics.js` — GA خنثی
+- `googletagmanager_gtm.js` — GTM خنثی
+- `googlesyndication_adsbygoogle.js` — AdSense خنثی
+- `amazon_apstag.js` — Amazon ads خنثی
+- `outbrain-widget.js` — Outbrain خنثی
+
+**فرق با stealth.js تو:** تو فقط `googletag` و `adsbygoogle` رو fake می‌کنی. uBlock برای ۱۰۰+ SDK نسخه خنثی داره.
+
+---
+
+### 2️⃣3️⃣ HTML Filtering — فیلتر محتوای HTML قبل از render
+**📌 منبع:** uBlock Origin (Firefox only), AdGuard
+
+**چیه؟**
+قبل از اینکه HTML به parser مرورگر برسه، inline scripts و المنت‌ها رو حذف می‌کنه:
+
+```
+example.com##^script:has-text(adblock)
+example.com##^script:has-text(detector)
+```
+
+**محدودیت:** فقط Firefox (Chrome اجازه نمی‌ده). ولی مفهوم اعمال‌شدنیه با service worker.
+
+---
+
+### 2️⃣4️⃣ Per-Site Switches — تنظیمات اختصاصی هر سایت
+**📌 منبع:** uBlock Origin
+
+**سوئیچ‌ها:**
+| سوئیچ | کار |
+|--------|-----|
+| No remote fonts | بلاک فونت‌های external (ضد fingerprint) |
+| No large media | بلاک مدیا بزرگتر از Xkb (صرفه‌جویی bandwidth) |
+| No scripting | بلاک کامل JS (حالت امن) |
+| No cosmetic filtering | غیرفعال فیلتر ظاهری (debug) |
+| No popups | بلاک popup‌ها |
+
+**تو:** فقط power on/off و whitelist داری. هیچ granularity نداری.
+
+---
+
+### 2️⃣5️⃣ Strict Blocking Page — صفحه هشدار دامنه خطرناک
+**📌 منبع:** uBlock Origin
+
+**چیه؟**
+وقتی user می‌خواد بره به دامنه خطرناک (malware/phishing)، به جای بلاک سایلنت، یه **صفحه هشدار** نشون می‌ده با گزینه "Proceed anyway".
+
+**تو:** malware domains رو سایلنت بلاک می‌کنی. user نمی‌فهمه چرا سایت لود نشد.
+
+---
+
+### 2️⃣6️⃣ AdGuard Extra — Anti-Circumvention Engine
+**📌 منبع:** AdGuardTeam/AdGuardExtra
+
+**چیه؟**
+یه engine جداگانه فقط برای **مبارزه با anti-adblock‌های پیشرفته‌ای** که rule‌های معمولی حریفشون نمیشن:
+
+**تکنیک‌ها:**
+- مانیتور کردن `MutationObserver` خود سایت (یعنی ناظر ناظرها!)
+- رهگیری و دستکاری obfuscated scripts
+- حل CAPTCHA-style ad verification
+- مقابله با inline script‌هایی که checksum خودشون رو verify می‌کنن
+- جلوگیری از re-injection تبلیغات بعد از حذف
+
+**تو `stealth.js` بخشی از اینا رو داری ولی:**
+- مانیتور MutationObserver سایت نداری
+- Obfuscated script detection نداری
+- Self-verification bypass نداری
+
+---
+
+### 2️⃣7️⃣ M3U/VAST/XML Pruning — حذف آگهی از فرمت‌های ویدیو
+**📌 منبع:** uBlock Origin (scriptlet `xml-prune`), AdGuard (`m3u-prune`)
+
+**چیه؟**
+- **VAST** (Video Ad Serving Template): فرمت XML استاندارد برای serve کردن آگهی ویدیویی. با `xml-prune` می‌شه قسمت‌هایی از XML response رو حذف کرد.
+- **M3U8** playlists: `m3u-prune` می‌تونه segment‌های آگهی رو حذف کنه.
+
+**تو `inject.js`:** فقط Twitch M3U8 رو handle می‌کنی. VAST/VPAID support نداری.
+
+---
+
+### 2️⃣8️⃣ ABP Snippet Syntax Compatibility — سازگاری با syntax فیلترها
+**📌 منبع:** uBlock, AdGuard, Brave, Ghostery
+
+**syntaxهای موجود:**
+| Syntax | مثال |
+|--------|------|
+| ABP (AdBlock Plus) | `||ads.example.com^` |
+| uBlock Extended | `example.com##+js(abort-on-property-read, adDetect)` |
+| AdGuard Extended | `example.com#%#//scriptlet('set-constant', 'adBlockDetected', 'false')` |
+| Procedural | `example.com##.container:has-text(Ad)` |
+
+**تو:** هیچ filter parser نداری. همه چی hardcode شده.
+
+---
+
+### 2️⃣9️⃣ WebRTC Leak Protection
+**📌 منبع:** uBlock Origin (`nowebrtc` scriptlet)
+
+**چیه؟**
+WebRTC می‌تونه IP واقعی user رو حتی پشت VPN لو بده. 
+
+**uBlock:** با scriptlet `nowebrtc` یا per-site switch، WebRTC رو disable می‌کنه.
+**تو:** هیچ WebRTC protection نداری.
+
+---
+
+### 3️⃣0️⃣ Crowdsourced Filter Lists + Community Ecosystem
+**📌 منبع:** uBlock (uAssets), EasyList, Hagezi, StevenBlack
+
+**چیه؟**
+- GitHub Issues برای report آگهی‌های miss شده
+- Pull request برای اضافه کردن rule
+- Auto-generate لیست‌ها از multiple sources
+- Versioning و changelog
+
+**تو:** هیچ community workflow نداری. یه نفره‌ای.
+
+---
+
+### 3️⃣1️⃣ AdNauseam Ad Vault — گالری تبلیغات
+**📌 منبع:** AdNauseam
+
+**چیه؟**
+همه تبلیغاتی که بلاک/کلیک شدن رو ذخیره و visualize می‌کنه:
+- تصویر thumbnail هر آگهی
+- لینک مقصد
+- تاریخ مواجهه
+- domain مبدأ
+- یه visualization از نوع "data art"
+
+---
+
+### 3️⃣2️⃣ Pi-hole Group Management — مدیریت دستگاه‌ها
+**📌 منبع:** Pi-hole
+
+**چیه؟**
+مدیریت لیست‌ها per-device:
+- بچه‌ها: بلاک porn + social media + gaming
+- والدین: فقط بلاک ads
+- IoT: بلاک telemetry
+- Guest: بلاک همه چیز
+
+**نامربوط به browser extension ولی ایده‌اش جالبه:** اگه multi-profile support داشته باشی (Work/Personal/Kids) → هر کدوم لیست خودشو داره.
+
+---
+
+### 3️⃣3️⃣ Brave adblock-rust Resource Assembler
+**📌 منبع:** brave/adblock-rust
+
+**چیه؟**
+یه پکیج که:
+1. فرمت scriptletهای uBlock Origin رو parse می‌کنه
+2. اونا رو compile می‌کنه به فرمت قابل inject
+3. در runtime تزریق می‌کنه
+
+**ایده برای تو:** به جای hardcode، یه mini-compiler بنویسی که scriptlet‌های uBlock رو بخونه و inject کنه.
+
+---
+
+### 3️⃣4️⃣ Privaxy System-Wide MITM (Rust)
+**📌 منبع:** Barre/privaxy
+
+**چیه؟**
+- نصب certificate محلی
+- پروکسی HTTPS بین app و اینترنت
+- فیلتر **تمام** ترافیک (نه فقط مرورگر)
+- Block توی Discord, Spotify, games, ...
+
+**نامربوط مستقیماً** (خارج از scope اکستنشن) ولی الهام‌بخشه برای نسخه desktop.
+
+---
+
+### 3️⃣5️⃣ eBPF/XDP Kernel-Level Filtering
+**📌 منبع:** Linux kernel projects
+
+**چیه؟**
+Drop کردن packet قبل از رسیدن به TCP stack:
+- صفر latency
+- صفر CPU overhead
+- فقط Linux
+
+**کاملاً خارج از scope اکستنشن.** ولی اگه روزی Pi-hole-like بسازی، eBPF بهترین لایه‌ست.
+
+---
+
+## 🎯 لیست کامل نهایی — به ترتیب اولویت
+
+### 🔴 Phase 1 — بدون اینا اکستنشن جدی نیست (MUST HAVE)
+| # | ویژگی | منبع |
+|---|--------|------|
+| 1 | Auto-Update Filter Lists (EasyList, EasyPrivacy, ...) | uBlock, AdGuard |
+| 2 | ABP/uBlock Filter Syntax Parser + DNR Compiler | Brave adblock-rust |
+| 3 | Scriptlets Engine (۲۰+ core scriptlet) | uBlock, AdGuard Scriptlets |
+| 4 | $redirect / Resource Replacement (neutered scripts) | uBlock, AdGuard |
+| 5 | $removeparam (حذف tracking params از URL) | uBlock, AdGuard |
+| 6 | Multi-regional Filter Lists (فارسی, عربی, ...) | Hagezi, EasyList |
+
+### 🟠 Phase 2 — حرفه‌ای (از رقبا جلو میفتی)
+| # | ویژگی | منبع |
+|---|--------|------|
+| 7 | Element Picker (بلاک دستی) | uBlock |
+| 8 | Procedural Cosmetic Filters (`:has-text()`, `:has()`) | uBlock |
+| 9 | SponsorBlock Integration | SponsorBlock |
+| 10 | Network Logger / Debug Panel | uBlock |
+| 11 | Per-Site Switches (no fonts, no large media, no scripts) | uBlock |
+| 12 | Dynamic Filtering Matrix (فایروال 3rd-party) | uBlock |
+| 13 | Import/Export Custom Filters | uBlock, AdGuard |
+| 14 | Strict Blocking Page (صفحه هشدار malware) | uBlock |
+| 15 | Statistics Dashboard (گراف, top domains) | Pi-hole, AdGuard |
+
+### 🟡 Phase 3 — نوآوری (یونیک + جذاب)
+| # | ویژگی | منبع |
+|---|--------|------|
+| 16 | AdNauseam-style Click Obfuscation (ارتقای tracker-poison) | AdNauseam |
+| 17 | Ad Vault (گالری تبلیغات بلاک‌شده) | AdNauseam |
+| 18 | VAST/VPAID XML Pruning (آگهی ویدیویی) | uBlock scriptlets |
+| 19 | WebRTC Leak Protection | uBlock |
+| 20 | Anti-Circumvention Engine (مانیتور ناظرها) | AdGuard Extra |
+| 21 | Multi-Profile (Work/Personal/Kids) | Pi-hole Groups |
+| 22 | Community Reporting System | SponsorBlock |
+| 23 | Perceptual Ad Blocking (AI/CV) | Princeton, AdEclipse |
+| 24 | UserScript Engine (Greasemonkey compatibility) | wBlock |
+
+---
+
 ## 📝 نتیجه‌گیری
 
 **بزرگ‌ترین gap تو نسبت به uBlock Origin:**

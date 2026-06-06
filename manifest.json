@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "UltraBlock — Ultimate Ad Blocker",
-  "version": "2.4.0",
-  "description": "Stealth-grade ad blocker with Cookie Negotiator, Dark Pattern Neutralizer, Dopamine Detox, Tracker Poisoning, and Retro Mode.",
+  "version": "2.5.0",
+  "description": "Stealth-grade ad blocker with Cookie Negotiator, Dark Pattern Neutralizer, Dopamine Detox, Tracker Poisoning, Retro Mode, SponsorBlock, Anti-Circumvention, and UserScript Engine.",
 
   "permissions": [
     "declarativeNetRequest",
@@ -23,6 +23,20 @@
   },
 
   "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/anti-circumvention.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/webrtc-protect.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
     {
       "matches": ["<all_urls>"],
       "js": ["src/content/stealth.js"],
@@ -46,12 +60,20 @@
     },
     {
       "matches": ["<all_urls>"],
+      "js": ["src/content/media-pruning.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
       "js": [
         "src/content/content.js",
         "src/content/cookie-negotiator.js",
         "src/content/dark-patterns.js",
         "src/content/dopamine-detox.js",
-        "src/content/retro-mode.js"
+        "src/content/retro-mode.js",
+        "src/content/userscript-engine.js"
       ],
       "css": ["src/styles/cosmetic.css"],
       "run_at": "document_start",
@@ -65,13 +87,13 @@
     },
     {
       "matches": ["*://*.youtube.com/*", "*://youtube.com/*"],
-      "js": ["src/content/youtube.js", "src/content/video-patch.js", "src/content/sponsorblock.js"],
+      "js": ["src/content/youtube.js", "src/content/video-patch.js", "src/content/sponsorblock.js", "src/content/sponsorblock-compiled.js"],
       "run_at": "document_start",
       "all_frames": false
     },
     {
       "matches": ["*://*.twitch.tv/*", "*://twitch.tv/*"],
-      "js": ["src/content/video-patch.js"],
+      "js": ["src/content/video-patch.js", "src/content/media-pruning.js"],
       "run_at": "document_start",
       "all_frames": false
     }
@@ -79,10 +101,11 @@
 
   "declarative_net_request": {
     "rule_resources": [
-      { "id": "ad_networks", "enabled": true, "path": "rules/ad_networks.json" },
-      { "id": "trackers",    "enabled": true, "path": "rules/trackers.json"    },
-      { "id": "malware",     "enabled": true, "path": "rules/malware.json"     },
-      { "id": "annoyances",  "enabled": true, "path": "rules/annoyances.json"  }
+      { "id": "ad_networks",    "enabled": true, "path": "rules/ad_networks.json" },
+      { "id": "trackers",       "enabled": true, "path": "rules/trackers.json"    },
+      { "id": "malware",        "enabled": true, "path": "rules/malware.json"     },
+      { "id": "annoyances",     "enabled": true, "path": "rules/annoyances.json"  },
+      { "id": "cname_trackers", "enabled": true, "path": "rules/cname-trackers.json" }
     ]
   },
 
@@ -112,7 +135,19 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/redirects/*", "src/redirects/ublock/*"],
+      "resources": [
+        "src/redirects/*",
+        "src/redirects/ublock/*",
+        "src/pages/blocked.html",
+        "src/pages/site-switches.html",
+        "src/pages/site-switches.js",
+        "src/pages/statistics.html",
+        "src/pages/statistics.js",
+        "src/pages/filters.html",
+        "src/pages/filters.js",
+        "src/pages/profiles.html",
+        "src/pages/profiles.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

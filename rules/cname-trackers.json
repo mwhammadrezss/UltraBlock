@@ -1,0 +1,131 @@
+[
+  {
+    "id": 70001,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": [
+        "2cnt.net",
+        "a8723.com",
+        "abtasty.com",
+        "actonservice.com",
+        "actonsoftware.com",
+        "adobe.com",
+        "at-o.net",
+        "branch.io",
+        "bugherd.com",
+        "bugsnag.com",
+        "cc-dt.com",
+        "cdn.branch.io",
+        "clicktale.net",
+        "commandersact.com",
+        "contentsquare.net",
+        "cookiebot.com",
+        "criteo.com",
+        "d.la1-c1cs.salesforceliveagent.com",
+        "dnstination.com",
+        "dotmetrics.net",
+        "dwin1.com",
+        "dynatrace.com",
+        "eloqua.com",
+        "emltrk.com",
+        "en25.com",
+        "episerver.net",
+        "eulerian.net",
+        "exacttarget.com",
+        "fuseplatform.net",
+        "go-mpulse.net",
+        "go.pardot.com",
+        "heapanalytics.com",
+        "hlserve.com",
+        "hs-analytics.net",
+        "hubspot.net",
+        "insight.adsrvr.org",
+        "intentiq.com",
+        "igodigital.com",
+        "k.keyade.com",
+        "kxcdn.com",
+        "lagardere-pub.com",
+        "lead.io",
+        "liveperson.net",
+        "lptag-a.liveperson.net",
+        "m6r.eu",
+        "marketo.net",
+        "mboxedge.com",
+        "mediarithmics.com",
+        "mookie1.com",
+        "mxpnl.com",
+        "nanovisor.io",
+        "npttech.com",
+        "nuggad.net",
+        "okt.to",
+        "omtrdc.net",
+        "online-metrix.net",
+        "oracleinfinity.io",
+        "pardot.com",
+        "pixel.ad",
+        "plausible.io",
+        "pswec.com",
+        "rfihub.com",
+        "rlcdn.com",
+        "rmtag.com",
+        "s7.addthis.com",
+        "salesforceliveagent.com",
+        "sc-static.net",
+        "segment.io",
+        "siteimproveanalytics.io",
+        "sn-cdn.net",
+        "tagcommander.com",
+        "tealiumiq.com",
+        "tracedock.com",
+        "tracktor.io",
+        "trafficguard.ai",
+        "truste.com",
+        "tt.omtrdc.net",
+        "veinteractive.com",
+        "webtrekk.net",
+        "wt-eu02.net",
+        "wt-safetag.com",
+        "xtcore.com",
+        "yottaa.com"
+      ],
+      "resourceTypes": ["script", "xmlhttprequest", "image", "sub_frame", "ping"]
+    }
+  },
+  {
+    "id": 70002,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||eulerian.net^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70003,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||omtrdc.net^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70004,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||dnstination.com^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70005,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||tracedock.com^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  }
+]

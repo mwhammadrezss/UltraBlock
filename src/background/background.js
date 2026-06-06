@@ -764,8 +764,116 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
     return true;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  PHASE 3: NEW MESSAGE HANDLERS
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── WebRTC toggle ─────────────────────────────────────────────────────
+  if (msg.action === 'toggleWebRTC') {
+    var newState = msg.enabled !== undefined ? msg.enabled : true;
+    chrome.storage.local.set({ webrtc_protection: newState }).then(function() {
+      sendResponse({ enabled: newState, needsReload: true });
+    });
+    return true;
+  }
+
+  if (msg.action === 'getWebRTCStatus') {
+    chrome.storage.local.get(['webrtc_protection']).then(function(data) {
+      sendResponse({ enabled: data.webrtc_protection !== false });
+    });
+    return true;
+  }
+
+  // ── SponsorBlock ──────────────────────────────────────────────────────
+  if (msg.action === 'getSponsorBlockStatus') {
+    chrome.storage.local.get(['sponsorblock_config']).then(function(data) {
+      var cfg = data.sponsorblock_config || { enabled: true };
+      sendResponse(cfg);
+    });
+    return true;
+  }
+
+  if (msg.action === 'toggleSponsorBlock') {
+    chrome.storage.local.get(['sponsorblock_config']).then(function(data) {
+      var cfg = data.sponsorblock_config || { enabled: true };
+      cfg.enabled = msg.enabled !== undefined ? msg.enabled : !cfg.enabled;
+      chrome.storage.local.set({ sponsorblock_config: cfg });
+      sendResponse({ enabled: cfg.enabled });
+    });
+    return true;
+  }
+
+  // ── Strict Blocking — allow blocked site temporarily ──────────────────
+  if (msg.action === 'allowBlockedSite') {
+    chrome.storage.session.get(['tempAllowlist']).then(function(data) {
+      var list = data.tempAllowlist || [];
+      if (list.indexOf(msg.domain) === -1) list.push(msg.domain);
+      chrome.storage.session.set({ tempAllowlist: list });
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  // ── Profile switching ─────────────────────────────────────────────────
+  if (msg.action === 'switchProfile') {
+    chrome.storage.local.set({ ub_active_profile: msg.profileId }).then(function() {
+      // Apply profile rules to rulesets
+      var rules = msg.rules || {};
+      var enableIds = [];
+      var disableIds = [];
+      if (rules.ads) enableIds.push('ad_networks'); else disableIds.push('ad_networks');
+      if (rules.trackers) enableIds.push('trackers'); else disableIds.push('trackers');
+      if (rules.malware) enableIds.push('malware'); else disableIds.push('malware');
+      if (rules.annoyances) enableIds.push('annoyances'); else disableIds.push('annoyances');
+
+      chrome.declarativeNetRequest.updateEnabledRulesets({
+        enableRulesetIds: enableIds,
+        disableRulesetIds: disableIds
+      }).then(function() {
+        sendResponse({ success: true });
+      });
+    });
+    return true;
+  }
+
+  // ── Per-site switches updated ─────────────────────────────────────────
+  if (msg.action === 'perSiteSwitchesUpdated') {
+    // Store and acknowledge — content scripts read from storage directly
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // ── Statistics recording ──────────────────────────────────────────────
+  if (msg.action === 'recordStat') {
+    chrome.storage.local.get(['ub_statistics', 'ub_hourly_stats']).then(function(data) {
+      var stats = data.ub_statistics || { totalBlocked: 0, totalTrackers: 0, totalCookies: 0, bytesBlocked: 0, domains: {}, allowedDomains: {}, categories: {}, daily: {} };
+      var hourly = data.ub_hourly_stats || {};
+
+      var now = new Date();
+      var dateKey = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate());
+      var hourKey = dateKey + '_' + pad2(now.getHours());
+
+      stats.totalBlocked += (msg.count || 1);
+      if (msg.category === 'tracker') stats.totalTrackers += 1;
+      if (msg.category === 'cookie') stats.totalCookies += 1;
+      if (msg.domain) stats.domains[msg.domain] = (stats.domains[msg.domain] || 0) + 1;
+      if (msg.category) stats.categories[msg.category] = (stats.categories[msg.category] || 0) + 1;
+
+      if (!stats.daily[dateKey]) stats.daily[dateKey] = { blocked: 0, trackers: 0, cookies: 0 };
+      stats.daily[dateKey].blocked += (msg.count || 1);
+
+      hourly[hourKey] = (hourly[hourKey] || 0) + (msg.count || 1);
+
+      chrome.storage.local.set({ ub_statistics: stats, ub_hourly_stats: hourly });
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
   return false;
 });
+
+function pad2(n) { return n.toString().padStart(2, '0'); }
 
 // ══════════════════════════════════════════════════════════════════════════
 //  10. KEYBOARD COMMANDS

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraBlock — Custom Filters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117; color: #e6edf3; padding: 24px; min-height: 100vh;
+    }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 20px; }
+    .tabs {
+      display: flex; gap: 0; margin-bottom: 20px;
+      border-bottom: 1px solid #30363d;
+    }
+    .tab {
+      padding: 10px 18px; font-size: 13px; font-weight: 500; cursor: pointer;
+      border-bottom: 2px solid transparent; color: #8b949e; transition: all 0.2s;
+    }
+    .tab.active { color: #e6edf3; border-bottom-color: #58a6ff; }
+    .tab:hover { color: #e6edf3; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    textarea {
+      width: 100%; min-height: 300px; background: #0d1117;
+      border: 1px solid #30363d; border-radius: 8px; color: #e6edf3;
+      font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px;
+      padding: 14px; line-height: 1.6; resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+    textarea::placeholder { color: #484f58; }
+
+    .help {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 16px; margin-top: 16px; font-size: 13px; line-height: 1.6;
+    }
+    .help h4 { color: #58a6ff; margin-bottom: 8px; font-size: 13px; }
+    .help code {
+      background: #21262d; padding: 2px 6px; border-radius: 3px;
+      font-family: monospace; font-size: 12px;
+    }
+
+    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1px solid #30363d; transition: all 0.2s;
+    }
+    .btn-primary { background: #238636; border-color: #238636; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-secondary { background: #21262d; color: #c9d1d9; }
+    .btn-secondary:hover { background: #30363d; }
+    .btn-danger { background: transparent; color: #f85149; border-color: #f85149; }
+    .btn-danger:hover { background: rgba(248,81,73,0.1); }
+
+    .subscribe-form {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .subscribe-form input {
+      flex: 1; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; padding: 8px 12px; color: #e6edf3; font-size: 13px;
+    }
+    .subscribe-form input:focus { outline: none; border-color: #58a6ff; }
+
+    .list-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .list-table th {
+      text-align: left; font-size: 11px; text-transform: uppercase;
+      color: #8b949e; padding: 8px; border-bottom: 1px solid #30363d;
+    }
+    .list-table td {
+      padding: 10px 8px; border-bottom: 1px solid #21262d; font-size: 13px;
+    }
+    .list-table .url { font-family: monospace; font-size: 11px; color: #58a6ff; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    .list-table .remove-btn { color: #f85149; cursor: pointer; font-size: 12px; }
+    .list-table .remove-btn:hover { text-decoration: underline; }
+
+    .status-msg {
+      padding: 10px 14px; border-radius: 6px; margin-top: 12px; font-size: 13px; display: none;
+    }
+    .status-msg.success { display: block; background: rgba(56,211,100,0.1); color: #3fb950; border: 1px solid #238636; }
+    .status-msg.error { display: block; background: rgba(248,81,73,0.1); color: #f85149; border: 1px solid #f85149; }
+
+    .stats-bar {
+      display: flex; gap: 16px; margin-bottom: 16px; font-size: 12px; color: #8b949e;
+    }
+    .stats-bar span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-active { background: #3fb950; }
+    .dot-count { background: #58a6ff; }
+  </style>
+</head>
+<body>
+  <h1>📝 Custom Filters</h1>
+  <p class="subtitle">Write your own filter rules or subscribe to external filter lists</p>
+
+  <div class="stats-bar">
+    <span><span class="dot dot-active"></span> Active filters: <strong id="active-count">0</strong></span>
+    <span><span class="dot dot-count"></span> Custom rules: <strong id="custom-count">0</strong></span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="editor">My Filters</div>
+    <div class="tab" data-panel="subscribe">Subscriptions</div>
+    <div class="tab" data-panel="importexport">Import / Export</div>
+  </div>
+
+  <!-- Editor Panel -->
+  <div class="panel active" id="panel-editor">
+    <textarea id="filter-editor" placeholder="Enter your custom filter rules here, one per line.&#10;&#10;Examples:&#10;||ads.example.com^&#10;example.com##.ad-banner&#10;example.com##+js(abort-on-property-read, adDetect)&#10;@@||example.com/api/*$script"></textarea>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-apply">Apply Filters</button>
+      <button class="btn btn-secondary" id="btn-validate">Validate Syntax</button>
+      <button class="btn btn-danger" id="btn-clear-filters">Clear All</button>
+    </div>
+    <div class="help">
+      <h4>Syntax Reference</h4>
+      <p><code>||domain.com^</code> — Block all requests to domain<br>
+      <code>@@||domain.com^</code> — Allowlist exception<br>
+      <code>domain.com##.selector</code> — Hide CSS element<br>
+      <code>domain.com##+js(scriptlet, arg)</code> — Inject scriptlet<br>
+      <code>*$removeparam=utm_source</code> — Remove URL parameter<br>
+      <code>||ads.com^$redirect=noop.js</code> — Redirect to neutered resource</p>
+    </div>
+    <div class="status-msg" id="editor-status"></div>
+  </div>
+
+  <!-- Subscribe Panel -->
+  <div class="panel" id="panel-subscribe">
+    <div class="subscribe-form">
+      <input type="url" id="subscribe-url" placeholder="https://example.com/filterlist.txt">
+      <button class="btn btn-primary" id="btn-subscribe">Subscribe</button>
+    </div>
+    <table class="list-table">
+      <thead>
+        <tr><th>Name</th><th>URL</th><th>Rules</th><th>Updated</th><th></th></tr>
+      </thead>
+      <tbody id="subscriptions-list"></tbody>
+    </table>
+    <div class="status-msg" id="subscribe-status"></div>
+  </div>
+
+  <!-- Import/Export Panel -->
+  <div class="panel" id="panel-importexport">
+    <div class="actions" style="margin-bottom:16px">
+      <button class="btn btn-secondary" id="btn-export">📥 Export Filters (JSON)</button>
+      <button class="btn btn-secondary" id="btn-export-txt">📥 Export Filters (Text)</button>
+      <label class="btn btn-secondary" style="margin:0">
+        📤 Import
+        <input type="file" id="btn-import" accept=".json,.txt,.csv" style="display:none">
+      </label>
+    </div>
+    <div class="help">
+      <h4>Import/Export Info</h4>
+      <p>Export saves all your custom filters and subscriptions.<br>
+      Import accepts JSON (UltraBlock format) or plain text (one rule per line).<br>
+      Importing will merge with existing filters (no duplicates).</p>
+    </div>
+    <div class="status-msg" id="ie-status"></div>
+  </div>
+
+  <script src="filters.js"></script>
+</body>
+</html>

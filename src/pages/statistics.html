@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraBlock — Statistics Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    h1 { font-size: 22px; font-weight: 600; }
+    .period-select {
+      background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+      padding: 6px 12px; color: #e6edf3; font-size: 13px; cursor: pointer;
+    }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 18px;
+    }
+    .stat-card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .stat-card .delta { font-size: 12px; margin-top: 4px; }
+    .delta.up { color: #3fb950; }
+    .delta.down { color: #f85149; }
+
+    .chart-container {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 20px; margin-bottom: 24px;
+    }
+    .chart-container h3 { font-size: 14px; color: #8b949e; margin-bottom: 16px; }
+    .chart {
+      width: 100%; height: 180px; display: flex; align-items: flex-end;
+      gap: 2px; padding-top: 20px; position: relative;
+    }
+    .chart-bar {
+      flex: 1; background: #238636; border-radius: 2px 2px 0 0;
+      min-height: 2px; transition: height 0.3s; position: relative;
+      cursor: pointer;
+    }
+    .chart-bar:hover { background: #3fb950; }
+    .chart-bar .tooltip {
+      display: none; position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%); background: #1c2128; border: 1px solid #30363d;
+      padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap;
+      z-index: 10;
+    }
+    .chart-bar:hover .tooltip { display: block; }
+    .chart-labels {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: #484f58; margin-top: 8px;
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+    .list-container {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 18px; margin-bottom: 16px;
+    }
+    .list-container h3 { font-size: 14px; color: #8b949e; margin-bottom: 12px; }
+    .list-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid #21262d;
+      font-size: 13px;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item .domain { color: #58a6ff; font-family: monospace; font-size: 12px; }
+    .list-item .count { color: #8b949e; font-weight: 600; }
+
+    .category-breakdown {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+    }
+    .cat-chip {
+      padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+    }
+    .footer { text-align: center; font-size: 12px; color: #484f58; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Statistics Dashboard</h1>
+    <select class="period-select" id="period-select">
+      <option value="today">Today</option>
+      <option value="week" selected>This Week</option>
+      <option value="month">This Month</option>
+      <option value="all">All Time</option>
+    </select>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Requests Blocked</div>
+      <div class="value" id="total-blocked">0</div>
+      <div class="delta up" id="delta-blocked">↑ calculating...</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Trackers Neutralized</div>
+      <div class="value" id="total-trackers">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Cookies Auto-Rejected</div>
+      <div class="value" id="total-cookies">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Data Saved (est.)</div>
+      <div class="value" id="data-saved">0 MB</div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <h3>Blocks Over Time (hourly)</h3>
+    <div class="chart" id="timeline-chart"></div>
+    <div class="chart-labels" id="chart-labels"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="list-container">
+      <h3>🚫 Top Blocked Domains</h3>
+      <div id="top-blocked"></div>
+    </div>
+    <div class="list-container">
+      <h3>✅ Top Allowed Domains</h3>
+      <div id="top-allowed"></div>
+    </div>
+  </div>
+
+  <div class="list-container">
+    <h3>Block Categories</h3>
+    <div class="category-breakdown" id="categories"></div>
+  </div>
+
+  <p class="footer">UltraBlock v2.4 — Data stored locally, never sent anywhere.</p>
+
+  <script src="statistics.js"></script>
+</body>
+</html>

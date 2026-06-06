@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraBlock — Site Blocked</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+    .shield {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: linear-gradient(135deg, #ff4444, #cc0000);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(255, 68, 68, 0.3);
+    }
+    .shield svg {
+      width: 40px;
+      height: 40px;
+      fill: #fff;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #ff6b6b;
+    }
+    .reason {
+      font-size: 14px;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+    .domain {
+      font-family: 'Fira Code', 'Courier New', monospace;
+      font-size: 16px;
+      padding: 8px 16px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      display: inline-block;
+      margin: 12px 0 24px;
+      color: #ff7b72;
+      word-break: break-all;
+    }
+    .info {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .info h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+      margin-bottom: 10px;
+    }
+    .info ul {
+      list-style: none;
+      padding: 0;
+    }
+    .info li {
+      font-size: 13px;
+      color: #c9d1d9;
+      padding: 4px 0;
+      padding-left: 16px;
+      position: relative;
+    }
+    .info li::before {
+      content: '⚠️';
+      position: absolute;
+      left: 0;
+      top: 4px;
+      font-size: 11px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-back {
+      background: #238636;
+      border-color: #238636;
+      color: #fff;
+    }
+    .btn-back:hover { background: #2ea043; }
+    .btn-proceed {
+      background: transparent;
+      color: #8b949e;
+      border-color: #30363d;
+    }
+    .btn-proceed:hover {
+      color: #ff6b6b;
+      border-color: #ff6b6b;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 12px;
+      color: #484f58;
+    }
+    .category-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .cat-malware { background: rgba(255,68,68,0.15); color: #ff6b6b; }
+    .cat-phishing { background: rgba(255,153,0,0.15); color: #ffaa33; }
+    .cat-tracking { background: rgba(163,113,247,0.15); color: #a371f7; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="shield">
+      <svg viewBox="0 0 24 24"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-1 14l-3.5-3.5 1.41-1.41L11 13.17l5.09-5.09 1.41 1.42L11 16z"/></svg>
+    </div>
+
+    <h1>Site Blocked by UltraBlock</h1>
+
+    <p class="reason" id="reason">This site has been identified as potentially dangerous.</p>
+
+    <div class="domain" id="blocked-domain">loading...</div>
+
+    <span class="category-badge cat-malware" id="category-badge">malware</span>
+
+    <div class="info">
+      <h3>Why was this blocked?</h3>
+      <ul>
+        <li>This domain appears in known threat intelligence lists</li>
+        <li>Visiting may expose your device to malware or data theft</li>
+        <li>Your personal information could be at risk</li>
+      </ul>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-back" id="btn-back">← Go Back to Safety</button>
+      <button class="btn btn-proceed" id="btn-proceed">Proceed Anyway (Unsafe)</button>
+    </div>
+
+    <p class="footer">Protected by UltraBlock v2.4 — <span id="list-source"></span></p>
+  </div>
+
+  <script>
+    (function() {
+      // Parse URL params
+      const params = new URLSearchParams(window.location.search);
+      const domain = params.get('domain') || 'unknown';
+      const url = params.get('url') || '';
+      const category = params.get('category') || 'malware';
+      const source = params.get('source') || 'UltraBlock threat list';
+
+      // Populate page
+      document.getElementById('blocked-domain').textContent = domain;
+      document.getElementById('list-source').textContent = `Source: ${source}`;
+
+      // Set category badge
+      const badge = document.getElementById('category-badge');
+      badge.textContent = category;
+      badge.className = 'category-badge cat-' + category;
+
+      // Reason text
+      const reasons = {
+        malware: 'This site is known to distribute malware or malicious software.',
+        phishing: 'This site may attempt to steal your personal information.',
+        tracking: 'This site is an aggressive cross-site tracker.'
+      };
+      document.getElementById('reason').textContent = reasons[category] || reasons.malware;
+
+      // Go back button
+      document.getElementById('btn-back').addEventListener('click', () => {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.location.href = 'about:newtab';
+        }
+      });
+
+      // Proceed anyway — add to temporary allowlist for this session
+      document.getElementById('btn-proceed').addEventListener('click', () => {
+        if (confirm('Are you sure? This site may harm your device or steal your data.')) {
+          chrome.runtime.sendMessage({
+            action: 'allowBlockedSite',
+            domain: domain,
+            url: url,
+            temporary: true // Only allow for this session
+          }, response => {
+            if (response && response.success) {
+              window.location.href = url || `https://${domain}`;
+            }
+          });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

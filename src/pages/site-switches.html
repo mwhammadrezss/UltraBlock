@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraBlock — Per-Site Controls</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 24px;
+      min-width: 400px;
+    }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 20px; }
+    .domain-header {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .domain-icon {
+      width: 32px; height: 32px; border-radius: 4px;
+      background: #21262d; display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .domain-name { font-family: monospace; font-size: 14px; color: #58a6ff; }
+
+    .switch-group {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .switch-group h3 {
+      padding: 12px 18px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+    }
+    .switch-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid #21262d;
+    }
+    .switch-item:last-child { border-bottom: none; }
+    .switch-label { display: flex; flex-direction: column; gap: 2px; }
+    .switch-label span { font-size: 14px; font-weight: 500; }
+    .switch-label small { font-size: 12px; color: #8b949e; }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative; width: 44px; height: 24px;
+      background: #30363d; border-radius: 12px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.active { background: #238636; }
+    .toggle::after {
+      content: '';
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; transition: transform 0.2s;
+    }
+    .toggle.active::after { transform: translateX(20px); }
+
+    .actions {
+      display: flex; gap: 10px; margin-top: 20px;
+    }
+    .btn {
+      padding: 8px 16px; border-radius: 6px; font-size: 13px;
+      font-weight: 500; cursor: pointer; border: 1px solid #30363d;
+      transition: all 0.2s;
+    }
+    .btn-save { background: #238636; border-color: #238636; color: #fff; }
+    .btn-save:hover { background: #2ea043; }
+    .btn-reset { background: transparent; color: #8b949e; }
+    .btn-reset:hover { color: #e6edf3; border-color: #8b949e; }
+    .status { font-size: 12px; color: #3fb950; margin-top: 10px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>⚙️ Per-Site Controls</h1>
+  <p class="subtitle">Fine-tune UltraBlock behavior for specific sites</p>
+
+  <div class="domain-header">
+    <div class="domain-icon" id="domain-icon">🌐</div>
+    <div>
+      <div class="domain-name" id="current-domain">loading...</div>
+    </div>
+  </div>
+
+  <div class="switch-group">
+    <h3>Content Filtering</h3>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Cosmetic Filtering</span>
+        <small>Hide ad elements from the page</small>
+      </div>
+      <div class="toggle active" data-switch="cosmetic"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Scriptlet Injection</span>
+        <small>Run anti-adblock countermeasures</small>
+      </div>
+      <div class="toggle active" data-switch="scriptlets"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Procedural Filters</span>
+        <small>Advanced CSS-based element hiding</small>
+      </div>
+      <div class="toggle active" data-switch="procedural"></div>
+    </div>
+  </div>
+
+  <div class="switch-group">
+    <h3>Network</h3>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Block Remote Fonts</span>
+        <small>Prevent external font loading (reduces fingerprinting)</small>
+      </div>
+      <div class="toggle" data-switch="noFonts"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Block Large Media</span>
+        <small>Block media files larger than 500KB</small>
+      </div>
+      <div class="toggle" data-switch="noLargeMedia"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Block 3rd-Party Scripts</span>
+        <small>Block all third-party JavaScript</small>
+      </div>
+      <div class="toggle" data-switch="no3pScripts"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Block 3rd-Party Frames</span>
+        <small>Block all third-party iframes</small>
+      </div>
+      <div class="toggle" data-switch="no3pFrames"></div>
+    </div>
+  </div>
+
+  <div class="switch-group">
+    <h3>Privacy</h3>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>WebRTC Protection</span>
+        <small>Prevent IP leak through WebRTC</small>
+      </div>
+      <div class="toggle active" data-switch="noWebRTC"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Block Popups</span>
+        <small>Prevent popup/popunder windows</small>
+      </div>
+      <div class="toggle active" data-switch="noPopups"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Remove URL Tracking Params</span>
+        <small>Strip fbclid, utm_*, gclid from URLs</small>
+      </div>
+      <div class="toggle active" data-switch="removeParams"></div>
+    </div>
+  </div>
+
+  <div class="switch-group">
+    <h3>UltraBlock Specials</h3>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Cookie Negotiator</span>
+        <small>Auto-reject non-essential cookies</small>
+      </div>
+      <div class="toggle active" data-switch="cookieNeg"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Dark Pattern Shield</span>
+        <small>Neutralize deceptive UI patterns</small>
+      </div>
+      <div class="toggle active" data-switch="darkPatterns"></div>
+    </div>
+    <div class="switch-item">
+      <div class="switch-label">
+        <span>Tracker Poisoning</span>
+        <small>Feed fake data to trackers</small>
+      </div>
+      <div class="toggle active" data-switch="trackerPoison"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-save" id="btn-save">Save Settings</button>
+    <button class="btn btn-reset" id="btn-reset">Reset to Defaults</button>
+  </div>
+  <p class="status" id="status">✓ Settings saved</p>
+
+  <script src="site-switches.js"></script>
+</body>
+</html>

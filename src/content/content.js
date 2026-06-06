@@ -656,9 +656,22 @@
   try {
     chrome.runtime.onMessage.addListener(function(msg, _sender, sendResponse) {
       if (msg.action === 'getPageBlockCount') {
-        // Count hidden elements on this page
         var count = document.querySelectorAll('[' + HIDDEN_ATTR + ']').length;
         sendResponse({ count: count });
+      }
+      if (msg.action === 'profileChanged') {
+        // Profile switched — re-read rules and apply
+        var rules = msg.rules || {};
+        // Disable/enable features based on profile
+        if (rules.dopamineDetox === false) {
+          document.documentElement.classList.remove('ub-dopamine-detox');
+        }
+        if (rules.retroMode === false) {
+          document.documentElement.classList.remove('ub-retro-mode');
+        }
+        // Trigger re-scan
+        try { processPage(); } catch (_) {}
+        sendResponse({ ack: true });
       }
     });
   } catch (_) {}

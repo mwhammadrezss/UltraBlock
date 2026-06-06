@@ -87,7 +87,62 @@
         "wt-eu02.net",
         "wt-safetag.com",
         "xtcore.com",
-        "yottaa.com"
+        "yottaa.com",
+        "aiv7l.net",
+        "affex.org",
+        "akstat.io",
+        "alexametrics.com",
+        "at-o.net",
+        "bp01.net",
+        "brealtime.com",
+        "c.evidon.com",
+        "c.go-mpulse.net",
+        "cdn.mxpnl.com",
+        "d.impactradius.com",
+        "data.coremetrics.com",
+        "datadome.co",
+        "dnsdelegation.io",
+        "dpm.demdex.net",
+        "e.customeriomail.com",
+        "ecommstats.com",
+        "edgekey.net",
+        "enom.com",
+        "e.sinaimg.cn",
+        "fls.doubleclick.net",
+        "global.ssl.fastly.net",
+        "gw.trkn.us",
+        "h7.hitslink.com",
+        "insight.adsrvr.org",
+        "key-cdx.com",
+        "ldc.live.net",
+        "m.stripe.com",
+        "metrics.icloud.com",
+        "mparticle.com",
+        "my.jst.ai",
+        "o2.mouseflow.com",
+        "optimal.outsmartest.com",
+        "p.typekit.net",
+        "pages02.net",
+        "pixel.facebook.com",
+        "pixel.wp.com",
+        "px.ads.linkedin.com",
+        "redirector.gvt1.com",
+        "s.pinimg.com",
+        "smetrics.abc.com",
+        "smetrics.att.com",
+        "smetrics.bestbuy.com",
+        "smetrics.dell.com",
+        "smetrics.samsung.com",
+        "smetrics.t-mobile.com",
+        "smetrics.ups.com",
+        "smetrics.walgreens.com",
+        "tags.tiqcdn.com",
+        "tr.outbrain.com",
+        "track.customer.io",
+        "tracking.bp01.net",
+        "usabilla.com",
+        "visitor-analytics.io",
+        "x.clearbitjs.com"
       ],
       "resourceTypes": ["script", "xmlhttprequest", "image", "sub_frame", "ping"]
     }
@@ -125,6 +180,51 @@
     "action": { "type": "block" },
     "condition": {
       "urlFilter": "||tracedock.com^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70006,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||datadome.co^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70007,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||smetrics.",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70008,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||mparticle.com^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70009,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||visitor-analytics.io^",
+      "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
+    }
+  },
+  {
+    "id": 70010,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||dnsdelegation.io^",
       "resourceTypes": ["script", "xmlhttprequest", "image", "ping"]
     }
   }

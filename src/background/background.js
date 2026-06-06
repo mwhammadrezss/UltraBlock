@@ -75,10 +75,12 @@ chrome.runtime.onInstalled.addListener(function(details) {
   loadState().then(function() {
     installCSPRule();
     restoreWhitelistRules();
+    restorePerSiteRules();
     registerPollAlarm();
     setupRealTimeListener();
     refreshAllBadges();
     initFilterSystem(details.reason === 'install');
+    buildMalwareDomainList();
   });
   chrome.action.setBadgeBackgroundColor({ color: '#1E82FF' }).catch(function() {});
   console.log('[UltraBlock] Installed/Updated:', details.reason);
@@ -88,10 +90,12 @@ chrome.runtime.onStartup.addListener(function() {
   loadState().then(function() {
     installCSPRule();
     restoreWhitelistRules();
+    restorePerSiteRules();
     registerPollAlarm();
     setupRealTimeListener();
     refreshAllBadges();
     initFilterSystem(false);
+    buildMalwareDomainList();
   });
 });
 
@@ -262,8 +266,14 @@ function setupRealTimeListener() {
         totalBlockedAllTime++;
 
         updateBadge(tabId);
-        // Batch saves (don't save on every single block)
         debouncedSave();
+
+        // Enhanced statistics: record per-domain and per-category
+        var reqUrl = info.request && info.request.url;
+        var ruleId = info.rule && info.rule.ruleId;
+        if (reqUrl && ruleId) {
+          recordBlockWithMetadata(tabId, reqUrl, ruleId);
+        }
       });
       console.log('[UltraBlock] Real-time listener active (onRuleMatchedDebug)');
     } catch (e) {
@@ -817,7 +827,6 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
   // ── Profile switching ─────────────────────────────────────────────────
   if (msg.action === 'switchProfile') {
     chrome.storage.local.set({ ub_active_profile: msg.profileId }).then(function() {
-      // Apply profile rules to rulesets
       var rules = msg.rules || {};
       var enableIds = [];
       var disableIds = [];
@@ -825,22 +834,41 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
       if (rules.trackers) enableIds.push('trackers'); else disableIds.push('trackers');
       if (rules.malware) enableIds.push('malware'); else disableIds.push('malware');
       if (rules.annoyances) enableIds.push('annoyances'); else disableIds.push('annoyances');
+      if (rules.trackers) enableIds.push('cname_trackers'); else disableIds.push('cname_trackers');
 
-      chrome.declarativeNetRequest.updateEnabledRulesets({
+      return chrome.declarativeNetRequest.updateEnabledRulesets({
         enableRulesetIds: enableIds,
         disableRulesetIds: disableIds
       }).then(function() {
+        // Store active profile rules so content scripts can read them
+        return chrome.storage.local.set({ ub_active_rules: rules });
+      }).then(function() {
+        // Notify all tabs to re-read profile settings
+        return chrome.tabs.query({});
+      }).then(function(tabs) {
+        for (var i = 0; i < tabs.length; i++) {
+          chrome.tabs.sendMessage(tabs[i].id, {
+            action: 'profileChanged',
+            profileId: msg.profileId,
+            rules: rules
+          }).catch(function() {});
+        }
         sendResponse({ success: true });
       });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
     });
     return true;
   }
 
   // ── Per-site switches updated ─────────────────────────────────────────
   if (msg.action === 'perSiteSwitchesUpdated') {
-    // Store and acknowledge — content scripts read from storage directly
-    sendResponse({ success: true });
-    return false;
+    applyPerSiteDNRRules(msg.domain, msg.switches).then(function() {
+      sendResponse({ success: true });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
   }
 
   // ── Statistics recording ──────────────────────────────────────────────
@@ -874,6 +902,298 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
 });
 
 function pad2(n) { return n.toString().padStart(2, '0'); }
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  9b. PER-SITE SWITCHES DNR ENFORCEMENT
+//      Generates dynamic DNR rules for per-site toggles (no-fonts, no-large-media, etc.)
+// ══════════════════════════════════════════════════════════════════════════
+var PERSITE_RULE_BASE = 62000;
+var PERSITE_RULE_RANGE = 500;
+
+function persiteRuleId(domain, offset) {
+  var hash = 5381;
+  for (var i = 0; i < domain.length; i++) {
+    hash = ((hash << 5) + hash + domain.charCodeAt(i)) | 0;
+  }
+  return PERSITE_RULE_BASE + (Math.abs(hash) % PERSITE_RULE_RANGE) * 6 + offset;
+}
+
+function applyPerSiteDNRRules(domain, switches) {
+  if (!domain) return Promise.resolve();
+
+  var removeIds = [];
+  var addRules = [];
+
+  // Generate up to 6 rules per domain
+  for (var i = 0; i < 6; i++) {
+    removeIds.push(persiteRuleId(domain, i));
+  }
+
+  var ruleIdx = 0;
+
+  // Block remote fonts
+  if (switches.noFonts) {
+    addRules.push({
+      id: persiteRuleId(domain, ruleIdx++),
+      priority: 100,
+      action: { type: 'block' },
+      condition: {
+        initiatorDomains: [domain],
+        resourceTypes: ['font'],
+        excludedInitiatorDomains: []
+      }
+    });
+  }
+
+  // Block large media (use modifyHeaders to intercept — simplified: block media)
+  if (switches.noLargeMedia) {
+    addRules.push({
+      id: persiteRuleId(domain, ruleIdx++),
+      priority: 100,
+      action: { type: 'block' },
+      condition: {
+        initiatorDomains: [domain],
+        resourceTypes: ['media'],
+        excludedInitiatorDomains: []
+      }
+    });
+  }
+
+  // Block 3rd-party scripts
+  if (switches.no3pScripts) {
+    addRules.push({
+      id: persiteRuleId(domain, ruleIdx++),
+      priority: 100,
+      action: { type: 'block' },
+      condition: {
+        initiatorDomains: [domain],
+        excludedRequestDomains: [domain],
+        resourceTypes: ['script']
+      }
+    });
+  }
+
+  // Block 3rd-party frames
+  if (switches.no3pFrames) {
+    addRules.push({
+      id: persiteRuleId(domain, ruleIdx++),
+      priority: 100,
+      action: { type: 'block' },
+      condition: {
+        initiatorDomains: [domain],
+        excludedRequestDomains: [domain],
+        resourceTypes: ['sub_frame']
+      }
+    });
+  }
+
+  // Block popups (new windows from this domain)
+  if (switches.noPopups === false) {
+    // Popups are blocked by default; only add rule to ALLOW if user disables
+    addRules.push({
+      id: persiteRuleId(domain, ruleIdx++),
+      priority: 50,
+      action: { type: 'allow' },
+      condition: {
+        initiatorDomains: [domain],
+        resourceTypes: ['main_frame']
+      }
+    });
+  }
+
+  return chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: removeIds,
+    addRules: addRules
+  }).catch(function(e) {
+    console.warn('[UltraBlock] Per-site DNR error:', e.message);
+  });
+}
+
+// Restore per-site rules on startup
+function restorePerSiteRules() {
+  chrome.storage.local.get(['persite_switches']).then(function(data) {
+    var allSites = data.persite_switches || {};
+    var domains = Object.keys(allSites);
+    var chain = Promise.resolve();
+    domains.forEach(function(domain) {
+      chain = chain.then(function() {
+        return applyPerSiteDNRRules(domain, allSites[domain]);
+      });
+    });
+  }).catch(function() {});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  9c. MALWARE REDIRECT TO BLOCKED PAGE
+//      Redirects malware-blocked navigations to the warning page.
+// ══════════════════════════════════════════════════════════════════════════
+var MALWARE_REDIRECT_RULE_ID = 61000;
+
+function installMalwareRedirectRule() {
+  // Use the malware ruleset IDs to detect when a main_frame is blocked.
+  // MV3 doesn't support redirect from static rulesets, so we use a dynamic
+  // rule that matches known malware domains and redirects to blocked.html.
+  chrome.storage.local.get(['ub_malware_domains']).then(function(data) {
+    var domains = data.ub_malware_domains || [];
+    if (domains.length === 0) return;
+
+    // Take first 100 domains (DNR limit consideration)
+    var topDomains = domains.slice(0, 100);
+
+    chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [MALWARE_REDIRECT_RULE_ID],
+      addRules: [{
+        id: MALWARE_REDIRECT_RULE_ID,
+        priority: 2000,
+        action: {
+          type: 'redirect',
+          redirect: {
+            regexSubstitution: chrome.runtime.getURL('src/pages/blocked.html') +
+              '?domain=\\0&category=malware&source=UltraBlock+Threat+List'
+          }
+        },
+        condition: {
+          requestDomains: topDomains,
+          resourceTypes: ['main_frame']
+        }
+      }]
+    }).catch(function(e) {
+      console.warn('[UltraBlock] Malware redirect rule error:', e.message);
+    });
+  });
+}
+
+// Also intercept via webNavigation for broader coverage
+chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
+  if (details.frameId !== 0) return;
+  var hostname = '';
+  try { hostname = new URL(details.url).hostname; } catch (_) { return; }
+
+  // Check temp allowlist first
+  chrome.storage.session.get(['tempAllowlist']).then(function(data) {
+    var allowed = data.tempAllowlist || [];
+    if (allowed.indexOf(hostname) !== -1) return;
+
+    // Check against malware domain list
+    chrome.storage.local.get(['ub_malware_domains']).then(function(mdata) {
+      var malwareDomains = mdata.ub_malware_domains || [];
+      if (malwareDomains.indexOf(hostname) !== -1) {
+        var blockedUrl = chrome.runtime.getURL('src/pages/blocked.html') +
+          '?domain=' + encodeURIComponent(hostname) +
+          '&url=' + encodeURIComponent(details.url) +
+          '&category=malware&source=UltraBlock+Threat+List';
+        chrome.tabs.update(details.tabId, { url: blockedUrl }).catch(function() {});
+      }
+    });
+  });
+});
+
+// Build malware domain list from the static rules file on install/update
+function buildMalwareDomainList() {
+  // Read from the malware rules and extract domains for redirect
+  fetch(chrome.runtime.getURL('rules/malware.json'))
+    .then(function(r) { return r.json(); })
+    .then(function(rules) {
+      var domains = [];
+      rules.forEach(function(rule) {
+        if (rule.condition && rule.condition.requestDomains) {
+          domains = domains.concat(rule.condition.requestDomains);
+        }
+        if (rule.condition && rule.condition.urlFilter) {
+          // Extract domain from urlFilter like ||malware.com^
+          var match = (rule.condition.urlFilter || '').match(/^\|\|([a-zA-Z0-9.-]+)/);
+          if (match) domains.push(match[1]);
+        }
+      });
+      // Deduplicate
+      domains = Array.from(new Set(domains));
+      chrome.storage.local.set({ ub_malware_domains: domains });
+      console.log('[UltraBlock] Built malware domain list: ' + domains.length + ' domains');
+    })
+    .catch(function(e) {
+      console.warn('[UltraBlock] Failed to build malware list:', e);
+    });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  9d. ENHANCED STATISTICS — Collect per-domain/category from onRuleMatchedDebug
+// ══════════════════════════════════════════════════════════════════════════
+var _statsBatchDomains = {};
+var _statsBatchCategories = {};
+var _statsFlushTimer = null;
+
+function recordBlockWithMetadata(tabId, url, ruleId) {
+  var hostname = '';
+  try { hostname = new URL(url).hostname; } catch (_) {}
+  if (!hostname) return;
+
+  // Determine category from rule ID ranges
+  var category = 'ads';
+  if (ruleId >= 1 && ruleId < 10000) category = 'ads';
+  else if (ruleId >= 10000 && ruleId < 30000) category = 'trackers';
+  else if (ruleId >= 30000 && ruleId < 50000) category = 'malware';
+  else if (ruleId >= 50000 && ruleId < 60000) category = 'annoyances';
+  else if (ruleId >= 70000 && ruleId < 80000) category = 'cname';
+
+  _statsBatchDomains[hostname] = (_statsBatchDomains[hostname] || 0) + 1;
+  _statsBatchCategories[category] = (_statsBatchCategories[category] || 0) + 1;
+
+  if (!_statsFlushTimer) {
+    _statsFlushTimer = setTimeout(flushStatsBatch, 5000);
+  }
+}
+
+function flushStatsBatch() {
+  _statsFlushTimer = null;
+  var domains = _statsBatchDomains;
+  var cats = _statsBatchCategories;
+  _statsBatchDomains = {};
+  _statsBatchCategories = {};
+
+  if (Object.keys(domains).length === 0) return;
+
+  chrome.storage.local.get(['ub_statistics', 'ub_hourly_stats']).then(function(data) {
+    var stats = data.ub_statistics || {
+      totalBlocked: 0, totalTrackers: 0, totalCookies: 0,
+      bytesBlocked: 0, domains: {}, allowedDomains: {}, categories: {}, daily: {}
+    };
+    var hourly = data.ub_hourly_stats || {};
+    var now = new Date();
+    var dateKey = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+    var hourKey = dateKey + '_' + pad2(now.getHours());
+
+    var totalNew = 0;
+    for (var d in domains) {
+      stats.domains[d] = (stats.domains[d] || 0) + domains[d];
+      totalNew += domains[d];
+    }
+    for (var c in cats) {
+      stats.categories[c] = (stats.categories[c] || 0) + cats[c];
+    }
+
+    stats.totalBlocked += totalNew;
+    if (cats.trackers) stats.totalTrackers += cats.trackers;
+
+    if (!stats.daily[dateKey]) stats.daily[dateKey] = { blocked: 0, trackers: 0, cookies: 0 };
+    stats.daily[dateKey].blocked += totalNew;
+    if (cats.trackers) stats.daily[dateKey].trackers += cats.trackers;
+
+    hourly[hourKey] = (hourly[hourKey] || 0) + totalNew;
+
+    // Prune old hourly data (keep 7 days)
+    var cutoff = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    var cutoffKey = cutoff.getFullYear() + '-' + pad2(cutoff.getMonth() + 1) + '-' + pad2(cutoff.getDate());
+    for (var k in hourly) {
+      if (k < cutoffKey) delete hourly[k];
+    }
+
+    chrome.storage.local.set({ ub_statistics: stats, ub_hourly_stats: hourly });
+  }).catch(function() {});
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════
 //  10. KEYBOARD COMMANDS

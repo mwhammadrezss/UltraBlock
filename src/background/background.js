@@ -1,10 +1,17 @@
 /**
  * ══════════════════════════════════════════════════════════════
- *   UltraBlock — background.js  v2.3  (MV3 Service Worker)
+ *   UltraBlock — background.js  v2.4  (MV3 Service Worker)
  *   FIXED: Badge counter now survives SW restarts
+ *   NEW: Filter list auto-update + ABP→DNR compilation
  * ══════════════════════════════════════════════════════════════
  */
 'use strict';
+
+// ── Import filter system modules ────────────────────────────────────────
+importScripts(
+  '../filterlist/list-manager.js',
+  '../filterlist/filter-compiler.js'
+);
 
 // ══════════════════════════════════════════════════════════════════════════
 //  1. STATE
@@ -65,6 +72,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
     registerPollAlarm();
     setupRealTimeListener();
     refreshAllBadges();
+    initFilterSystem(details.reason === 'install');
   });
   chrome.action.setBadgeBackgroundColor({ color: '#1E82FF' }).catch(function() {});
   console.log('[UltraBlock] Installed/Updated:', details.reason);
@@ -77,8 +85,62 @@ chrome.runtime.onStartup.addListener(function() {
     registerPollAlarm();
     setupRealTimeListener();
     refreshAllBadges();
+    initFilterSystem(false);
   });
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  2b. FILTER LIST SYSTEM INITIALIZATION
+// ══════════════════════════════════════════════════════════════════════════
+function initFilterSystem(isFirstInstall) {
+  UBListManager.init().then(function() {
+    console.log('[UltraBlock] Filter list manager initialized');
+
+    // Register recompile callback when lists update
+    UBListManager.onUpdate(function() {
+      recompileFilters();
+    });
+
+    if (isFirstInstall) {
+      // First install: fetch all lists immediately
+      console.log('[UltraBlock] First install — fetching all filter lists...');
+      UBListManager.updateAllLists();
+    } else {
+      // Normal startup: check if lists need update (stale > 4h)
+      var meta = UBListManager.getListsMeta();
+      var now = Date.now();
+      var staleThreshold = 4 * 60 * 60 * 1000; // 4 hours
+      var needsUpdate = meta.some(function(m) {
+        return m.enabled && (now - m.lastUpdated) > staleThreshold;
+      });
+      if (needsUpdate) {
+        UBListManager.updateAllLists();
+      } else {
+        // Lists are fresh, just recompile from stored text
+        recompileFilters();
+      }
+    }
+  }).catch(function(e) {
+    console.error('[UltraBlock] Filter system init failed:', e);
+  });
+}
+
+function recompileFilters() {
+  UBListManager.getAllEnabledTexts().then(function(text) {
+    if (!text) {
+      console.log('[UltraBlock] No filter text to compile');
+      return;
+    }
+    return UBFilterCompiler.compileAndApply(text);
+  }).then(function(result) {
+    if (result) {
+      console.log('[UltraBlock] Filters compiled: ' + result.ruleCount + ' rules');
+    }
+  }).catch(function(e) {
+    console.error('[UltraBlock] Filter compilation error:', e);
+  });
+}
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -188,6 +250,11 @@ function registerPollAlarm() {
 chrome.alarms.onAlarm.addListener(function(alarm) {
   if (alarm.name === POLL_ALARM) {
     pollMatchedRules();
+    return;
+  }
+  // Delegate to filter list manager
+  if (UBListManager && UBListManager.handleAlarm(alarm.name)) {
+    return;
   }
 });
 
@@ -405,6 +472,72 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
       sendResponse({ enabled: rulesets.length > 0 });
     }).catch(function() { sendResponse({ enabled: true }); });
     return true;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  FILTER LIST MANAGEMENT MESSAGES
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── getFilterLists — return metadata for all lists ──────────────────
+  if (msg.action === 'getFilterLists') {
+    var meta = UBListManager ? UBListManager.getListsMeta() : [];
+    UBFilterCompiler.getRuleCount().then(function(count) {
+      sendResponse({ lists: meta, compiledRuleCount: count });
+    }).catch(function() {
+      sendResponse({ lists: meta, compiledRuleCount: 0 });
+    });
+    return true;
+  }
+
+  // ── setFilterListEnabled — enable/disable a list ────────────────────
+  if (msg.action === 'setFilterListEnabled') {
+    if (!UBListManager) { sendResponse({ success: false }); return false; }
+    UBListManager.setListEnabled(msg.listId, msg.enabled).then(function(ok) {
+      sendResponse({ success: ok });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  // ── updateFilterLists — force update all lists now ──────────────────
+  if (msg.action === 'updateFilterLists') {
+    if (!UBListManager) { sendResponse({ success: false }); return false; }
+    UBListManager.updateAllLists().then(function(result) {
+      sendResponse({ success: true, result: result });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  // ── addCustomFilterList — subscribe to a custom URL ─────────────────
+  if (msg.action === 'addCustomFilterList') {
+    if (!UBListManager) { sendResponse({ success: false }); return false; }
+    UBListManager.addCustomList(msg.url, msg.title).then(function(result) {
+      sendResponse(result);
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  // ── removeCustomFilterList — unsubscribe from a list ────────────────
+  if (msg.action === 'removeCustomFilterList') {
+    if (!UBListManager) { sendResponse({ success: false }); return false; }
+    UBListManager.removeCustomList(msg.listId).then(function(ok) {
+      sendResponse({ success: ok });
+    }).catch(function(e) {
+      sendResponse({ success: false, error: e.message });
+    });
+    return true;
+  }
+
+  // ── recompileFilters — force recompilation ──────────────────────────
+  if (msg.action === 'recompileFilters') {
+    recompileFilters();
+    sendResponse({ success: true });
+    return false;
   }
 
   return false;

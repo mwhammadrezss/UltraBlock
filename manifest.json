@@ -12,7 +12,8 @@
     "storage",
     "tabs",
     "webNavigation",
-    "alarms"
+    "alarms",
+    "unlimitedStorage"
   ],
 
   "host_permissions": ["<all_urls>"],
@@ -101,5 +102,12 @@
       "suggested_key": { "default": "Ctrl+Shift+E" },
       "description": "Toggle Retro Mode"
     }
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["src/redirects/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

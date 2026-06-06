@@ -1,0 +1,136 @@
+/**
+ * UltraBlock — cosmetic.css  v2.0
+ * Injected as a stylesheet (faster than JS style injection).
+ * Handles elements that are blocked at NETWORK level —
+ * their containers remain in DOM but are empty/broken.
+ * content.js handles dynamic elements via stealthHide().
+ */
+
+/* ── Google AdSense (unfilled after network block) ──────────────────────── */
+ins.adsbygoogle[data-ad-status="unfilled"],
+ins.adsbygoogle[style*="height: 0"],
+ins.adsbygoogle:empty {
+  display: none !important;
+}
+
+/* ── Empty iframes left by blocked ad networks ──────────────────────────── */
+iframe[src*="doubleclick.net"],
+iframe[src*="googlesyndication.com"],
+iframe[src*="adnxs.com"],
+iframe[src*="pubmatic.com"],
+iframe[src*="rubiconproject.com"],
+iframe[src*="openx.net"],
+iframe[src*="taboola.com"],
+iframe[src*="outbrain.com"],
+iframe[src*="criteo.com"],
+iframe[src*="amazon-adsystem.com"],
+iframe[src*="media.net"] {
+  display: none !important;
+}
+
+/* ── AMP ads ─────────────────────────────────────────────────────────────── */
+amp-ad,
+amp-sticky-ad,
+amp-auto-ads {
+  display: none !important;
+}
+
+/* ── Carbon Ads ──────────────────────────────────────────────────────────── */
+#carbonads,
+.carbon-ad,
+.carbonad {
+  display: none !important;
+}
+
+/* ── YouTube homepage/sidebar ads ───────────────────────────────────────── */
+ytd-ad-slot-renderer,
+ytd-in-feed-ad-layout-renderer,
+ytd-display-ad-renderer,
+ytd-promoted-sparkles-web-renderer,
+ytd-promoted-video-renderer,
+ytd-compact-promoted-video-renderer,
+ytd-carousel-ad-renderer,
+ytd-statement-banner-renderer,
+ytd-mealbar-promo-renderer,
+ytd-banner-promo-renderer,
+ytd-rich-item-renderer[is-ad],
+#masthead-ad,
+#player-ads {
+  display: none !important;
+}
+
+/* ── YouTube video player ad overlays ───────────────────────────────────── */
+.ytp-ad-overlay-container,
+.ytp-ad-text-overlay,
+.ytp-ad-image-overlay,
+.ytp-ad-module,
+.ytp-ad-action-interstitial,
+.ytp-ad-preview-container,
+.ytp-ad-badge,
+.ytp-ad-feedback-dialog-container,
+.ytp-suggested-action {
+  display: none !important;
+}
+
+/* ── Taboola ─────────────────────────────────────────────────────────────── */
+.trc_related_container,
+[id^="taboola-"],
+[class*="taboola"] {
+  display: none !important;
+}
+
+/* ── Outbrain ────────────────────────────────────────────────────────────── */
+.OUTBRAIN,
+[data-widget-id^="MB_"],
+[id^="outbrain-"] {
+  display: none !important;
+}
+
+/* ── Masthead / sticky / floating ads ───────────────────────────────────── */
+[class*="sticky-ad"],
+[class*="floating-ad"],
+[class*="fixed-ad"],
+[id*="sticky-ad"],
+[id*="floating-ad"],
+[class*="ad-popup"],
+[class*="popup-ad"],
+[class*="ad-overlay"],
+[class*="interstitial-ad"] {
+  display: none !important;
+}
+
+/* ── UltraBlock hidden marker (stealth-hidden elements) ────────────────── */
+/* NOTE: Do NOT set height:0 — anti-adblock bait checks use getComputedStyle.
+   stealth.js spoofs offsetHeight/getBCR but NOT getComputedStyle.
+   Use visibility:hidden + opacity:0 to be invisible while keeping dimensions. */
+[data-ub-hidden] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* ── Adult/popup network iframes ────────────────────────────────────────── */
+iframe[src*="juicyads"],
+iframe[src*="exoclick"],
+iframe[src*="exosrv"],
+iframe[src*="trafficjunky"],
+iframe[src*="popads"],
+iframe[src*="popcash"],
+iframe[src*="adsterra"],
+iframe[src*="hilltopads"],
+iframe[src*="adserver.juicyads"],
+iframe[src*="adzone"] {
+  display: none !important;
+}
+
+/* ── Persian/Iranian ad networks ────────────────────────────────────────── */
+iframe[src*="yektanet"],
+iframe[src*="tapsell"],
+iframe[src*="adivery"],
+iframe[src*="sabavision"],
+[id*="yektanet"],
+[class*="yektanet"],
+[id*="tapsell"],
+[class*="tapsell"] {
+  display: none !important;
+}

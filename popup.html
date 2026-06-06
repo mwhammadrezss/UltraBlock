@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UltraBlock</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      min-height: 280px;
+      background: #0f1117;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      user-select: none;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #1e2332;
+    }
+    .logo { font-size: 26px; line-height: 1; }
+    .title-block { flex: 1; }
+    .title-block h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.3px;
+    }
+    .title-block p {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+
+    /* ── Power toggle ────────────────────────────────────────── */
+    .toggle-wrap {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #334155;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #94a3b8;
+      border-radius: 50%;
+      transition: transform 0.25s, background 0.25s;
+    }
+    .toggle-wrap input:checked + .toggle-slider { background: #22c55e; }
+    .toggle-wrap input:checked + .toggle-slider::after {
+      transform: translateX(18px);
+      background: #fff;
+    }
+
+    /* ── Stats ──────────────────────────────────────────────── */
+    .stats {
+      display: flex;
+      gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid #1e2332;
+    }
+    .stat-card {
+      flex: 1;
+      background: #161b27;
+      border: 1px solid #1e2332;
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .stat-card .stat-value {
+      transition: transform 0.2s ease;
+      font-size: 22px;
+      font-weight: 700;
+      color: #38bdf8;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-card .stat-label {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Site section ───────────────────────────────────────── */
+    .site-section {
+      padding: 12px 18px 14px;
+      border-bottom: 1px solid #1e2332;
+    }
+    .site-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .site-info { overflow: hidden; }
+    .site-label {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .site-domain {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+    .site-domain.empty { color: #475569; font-style: italic; }
+
+    .site-btn {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .site-btn:active { transform: scale(0.96); }
+    .site-btn.pause  { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    .site-btn.resume { background: #064e3b; color: #34d399; border: 1px solid #065f46; }
+    .site-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 18px;
+    }
+    .footer-version { font-size: 11px; color: #475569; }
+    .footer-badge {
+      font-size: 10px;
+      font-weight: 700;
+      background: #1e293b;
+      color: #38bdf8;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid #1d4ed8;
+      letter-spacing: 0.5px;
+    }
+    .pulse { transform: scale(1.15); }
+      .pulse { animation: pulse-anim 0.3s ease; }
+    @keyframes pulse-anim { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <span class="logo">🛡️</span>
+    <div class="title-block">
+      <h1>UltraBlock</h1>
+      <p>Ultimate Ad Blocker</p>
+    </div>
+    <label class="toggle-wrap" title="Enable / disable protection">
+      <input type="checkbox" id="powerToggle" checked />
+      <span class="toggle-slider"></span>
+    </label>
+  </header>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="tabCount">0</div>
+      <div class="stat-label">This Page</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="totalCount">0</div>
+      <div class="stat-label">All Time</div>
+    </div>
+  </section>
+
+  <!-- Current site -->
+  <section class="site-section">
+    <div class="site-row">
+      <div class="site-info">
+        <div class="site-label">Current Site</div>
+        <div class="site-domain empty" id="siteDomain">—</div>
+      </div>
+      <button class="site-btn pause" id="siteBtn" disabled>Pause</button>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span class="footer-version">v2.3.0</span>
+    <span class="footer-badge">MV3</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

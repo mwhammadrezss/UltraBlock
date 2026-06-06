@@ -1,0 +1,427 @@
+/**
+ * ══════════════════════════════════════════════════════════════
+ *   UltraBlock — background.js  v2.3  (MV3 Service Worker)
+ *   FIXED: Badge counter now survives SW restarts
+ * ══════════════════════════════════════════════════════════════
+ */
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════════════
+//  1. STATE
+// ══════════════════════════════════════════════════════════════════════════
+var totalBlockedAllTime = 0;
+var tabStats = new Map();
+
+var CSP_RULE_ID          = 60000;
+var WHITELIST_RULE_BASE  = 50000;
+var WHITELIST_RULE_RANGE = 9000;
+var POLL_ALARM           = 'ub-poll';
+var _lastPollTime        = 0;  // Will be restored from session storage
+
+// ── Persistence helpers ─────────────────────────────────────────────────
+function loadState() {
+  return Promise.all([
+    chrome.storage.session.get(['tabStats', 'lastPollTime']),
+    chrome.storage.local.get(['totalBlocked'])
+  ]).then(function(results) {
+    var sessionData = results[0] || {};
+    var localData   = results[1] || {};
+
+    // Restore tabStats
+    if (sessionData.tabStats) {
+      for (var key in sessionData.tabStats) {
+        tabStats.set(Number(key), sessionData.tabStats[key]);
+      }
+    }
+
+    // Restore _lastPollTime — critical for accurate counting after SW restart
+    _lastPollTime = sessionData.lastPollTime || Date.now();
+
+    // Restore total
+    totalBlockedAllTime = localData.totalBlocked || 0;
+  }).catch(function() {
+    _lastPollTime = Date.now();
+  });
+}
+
+function saveTabStatsCache() {
+  var obj = {};
+  tabStats.forEach(function(val, key) { obj[key] = val; });
+  chrome.storage.session.set({ tabStats: obj, lastPollTime: _lastPollTime }).catch(function() {});
+}
+
+function saveTotalBlocked() {
+  chrome.storage.local.set({ totalBlocked: totalBlockedAllTime }).catch(function() {});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  2. INSTALL / STARTUP
+// ══════════════════════════════════════════════════════════════════════════
+chrome.runtime.onInstalled.addListener(function(details) {
+  loadState().then(function() {
+    installCSPRule();
+    restoreWhitelistRules();
+    registerPollAlarm();
+    setupRealTimeListener();
+    refreshAllBadges();
+  });
+  chrome.action.setBadgeBackgroundColor({ color: '#1E82FF' }).catch(function() {});
+  console.log('[UltraBlock] Installed/Updated:', details.reason);
+});
+
+chrome.runtime.onStartup.addListener(function() {
+  loadState().then(function() {
+    installCSPRule();
+    restoreWhitelistRules();
+    registerPollAlarm();
+    setupRealTimeListener();
+    refreshAllBadges();
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  3. CSP REMOVAL DYNAMIC RULE
+// ══════════════════════════════════════════════════════════════════════════
+function installCSPRule() {
+  return chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [CSP_RULE_ID],
+    addRules: [{
+      id: CSP_RULE_ID,
+      priority: 2,
+      action: {
+        type: 'modifyHeaders',
+        responseHeaders: [
+          { header: 'content-security-policy',             operation: 'remove' },
+          { header: 'content-security-policy-report-only', operation: 'remove' },
+          { header: 'x-frame-options',                     operation: 'remove' },
+        ],
+      },
+      condition: { resourceTypes: ['main_frame', 'sub_frame'] },
+    }],
+  }).catch(function(e) {
+    if (e.message && e.message.indexOf('Invalid rule') === -1) {
+      console.warn('[UltraBlock] CSP rule error:', e.message);
+    }
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  4. BADGE HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+function updateBadge(tabId) {
+  var stat = tabStats.get(tabId);
+  if (!stat) return;
+  var count = stat.blocked;
+  var text  = count === 0 ? '' : count >= 1000 ? '999+' : String(count);
+  chrome.action.setBadgeText({ text: text, tabId: tabId }).catch(function() {});
+  chrome.action.setBadgeBackgroundColor({ color: '#1E82FF', tabId: tabId }).catch(function() {});
+}
+
+function clearBadge(tabId) {
+  chrome.action.setBadgeText({ text: '', tabId: tabId }).catch(function() {});
+}
+
+function refreshAllBadges() {
+  chrome.tabs.query({ active: true }).then(function(tabs) {
+    for (var i = 0; i < tabs.length; i++) {
+      updateBadge(tabs[i].id);
+    }
+  }).catch(function() {});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  5. REAL-TIME LISTENER (declarativeNetRequestFeedback)
+//     Uses onRuleMatchedDebug for instant counting when available.
+//     Falls back to alarm polling.
+// ══════════════════════════════════════════════════════════════════════════
+var _realTimeListenerInstalled = false;
+function setupRealTimeListener() {
+  if (_realTimeListenerInstalled) return;
+  _realTimeListenerInstalled = true;
+  if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
+    try {
+      chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(function(info) {
+        var tabId = info.request && info.request.tabId;
+        if (!tabId || tabId < 0) return;
+
+        if (!tabStats.has(tabId)) tabStats.set(tabId, { blocked: 0, domain: '' });
+        tabStats.get(tabId).blocked++;
+        totalBlockedAllTime++;
+
+        updateBadge(tabId);
+        // Batch saves (don't save on every single block)
+        debouncedSave();
+      });
+      console.log('[UltraBlock] Real-time listener active (onRuleMatchedDebug)');
+    } catch (e) {
+      console.log('[UltraBlock] onRuleMatchedDebug not available, using polling');
+    }
+  }
+}
+
+var _saveTimer = null;
+function debouncedSave() {
+  if (_saveTimer) return;
+  _saveTimer = setTimeout(function() {
+    _saveTimer = null;
+    saveTabStatsCache();
+    saveTotalBlocked();
+  }, 2000);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  6. STATS POLLING via chrome.alarms (fallback + supplement)
+// ══════════════════════════════════════════════════════════════════════════
+function registerPollAlarm() {
+  chrome.alarms.get(POLL_ALARM, function(existing) {
+    if (!existing) {
+      chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.083 }); // ~5s
+    }
+  });
+}
+
+chrome.alarms.onAlarm.addListener(function(alarm) {
+  if (alarm.name === POLL_ALARM) {
+    pollMatchedRules();
+  }
+});
+
+function pollMatchedRules() {
+  var now = Date.now();
+  var since = _lastPollTime || (now - 6000); // fallback: last 6 seconds
+
+  chrome.declarativeNetRequest.getMatchedRules({
+    minTimeStamp: since,
+  }).then(function(result) {
+    _lastPollTime = now;
+    var matches = result.rulesMatchedInfo || [];
+    if (matches.length === 0) {
+      saveTabStatsCache(); // persist _lastPollTime even when no matches
+      return;
+    }
+
+    // Deduplicate: if onRuleMatchedDebug is active, these may overlap
+    // Use a simple approach: only count if onRuleMatchedDebug is NOT available
+    var hasRealTime = !!chrome.declarativeNetRequest.onRuleMatchedDebug;
+
+    if (!hasRealTime) {
+      var byTab = {};
+      for (var i = 0; i < matches.length; i++) {
+        var tid = matches[i].request && matches[i].request.tabId;
+        if (tid && tid > 0) byTab[tid] = (byTab[tid] || 0) + 1;
+      }
+
+      var newTotal = 0;
+      var tids = Object.keys(byTab);
+      for (var j = 0; j < tids.length; j++) {
+        var id    = Number(tids[j]);
+        var count = byTab[tids[j]];
+        if (!tabStats.has(id)) tabStats.set(id, { blocked: 0, domain: '' });
+        tabStats.get(id).blocked += count;
+        newTotal += count;
+        updateBadge(id);
+      }
+
+      if (newTotal > 0) {
+        totalBlockedAllTime += newTotal;
+        saveTotalBlocked();
+      }
+    }
+
+    saveTabStatsCache();
+  }).catch(function() {});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  7. TAB TRACKING
+// ══════════════════════════════════════════════════════════════════════════
+chrome.tabs.onActivated.addListener(function(info) {
+  var tabId = info.tabId;
+  if (!tabStats.has(tabId)) tabStats.set(tabId, { blocked: 0, domain: '' });
+  updateBadge(tabId);
+});
+
+chrome.tabs.onRemoved.addListener(function(tabId) {
+  tabStats.delete(tabId);
+  saveTabStatsCache();
+});
+
+chrome.webNavigation.onCommitted.addListener(function(details) {
+  if (details.frameId !== 0) return;
+  var tabId  = details.tabId;
+  var domain = '';
+  try { domain = new URL(details.url).hostname; } catch (_) {}
+
+  if (!tabStats.has(tabId)) {
+    tabStats.set(tabId, { blocked: 0, domain: domain });
+  } else {
+    tabStats.get(tabId).domain  = domain;
+    tabStats.get(tabId).blocked = 0;
+  }
+  clearBadge(tabId);
+  saveTabStatsCache();
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  8. WHITELIST HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+function domainToRuleId(domain) {
+  var hash = 5381;
+  for (var i = 0; i < domain.length; i++) {
+    hash = ((hash << 5) + hash + domain.charCodeAt(i)) | 0;
+  }
+  return WHITELIST_RULE_BASE + (Math.abs(hash) % WHITELIST_RULE_RANGE);
+}
+
+function addAllowRule(domain) {
+  var id = domainToRuleId(domain);
+  return chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [id],
+    addRules: [{
+      id: id,
+      priority: 1000,
+      action: { type: 'allow' },
+      condition: { requestDomains: [domain], initiatorDomains: [domain] },
+    }],
+  });
+}
+
+function removeAllowRule(domain) {
+  return chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [domainToRuleId(domain)],
+    addRules: [],
+  });
+}
+
+function restoreWhitelistRules() {
+  return chrome.storage.local.get(['whitelist']).then(function(data) {
+    var wl = data.whitelist || [];
+    return Promise.all(wl.map(function(domain) {
+      return addAllowRule(domain).catch(function() {});
+    }));
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  9. MESSAGE HANDLER
+// ══════════════════════════════════════════════════════════════════════════
+chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
+
+  // ── incrementBlock (from content.js cosmetic blocks) ──────────────────
+  if (msg.action === 'incrementBlock') {
+    var tabId = (sender.tab && sender.tab.id) || msg.tabId;
+    var count = msg.count || 1;
+    if (tabId && tabId > 0) {
+      if (!tabStats.has(tabId)) tabStats.set(tabId, { blocked: 0, domain: '' });
+      tabStats.get(tabId).blocked += count;
+      totalBlockedAllTime += count;
+      updateBadge(tabId);
+      debouncedSave();
+    }
+    return false;
+  }
+
+  // ── getStats ──────────────────────────────────────────────────────────
+  if (msg.action === 'getStats') {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(function(tabs) {
+      var tab    = tabs && tabs[0];
+      var tabId  = tab && tab.id;
+      var stat   = (tabId != null && tabStats.get(tabId)) || { blocked: 0, domain: '' };
+      var domain = stat.domain;
+      if (!domain && tab && tab.url) {
+        try { domain = new URL(tab.url).hostname; } catch (_) {}
+      }
+      return chrome.storage.local.get(['totalBlocked', 'whitelist']).then(function(data) {
+        var wl = data.whitelist || [];
+        sendResponse({
+          tabBlocked:   stat.blocked,
+          totalBlocked: data.totalBlocked || totalBlockedAllTime,
+          domain:       domain,
+          whitelisted:  wl.indexOf(domain) !== -1,
+          whitelist:    wl,
+        });
+      });
+    }).catch(function(e) {
+      sendResponse({ tabBlocked: 0, totalBlocked: totalBlockedAllTime, domain: '', whitelisted: false, whitelist: [], error: e.message });
+    });
+    return true;
+  }
+
+  // ── toggleSite ────────────────────────────────────────────────────────
+  if (msg.action === 'toggleSite') {
+    var domain = msg.domain;
+    var enable = msg.whitelist;
+    chrome.storage.local.get(['whitelist']).then(function(data) {
+      var wl = data.whitelist || [];
+      if (enable) {
+        if (wl.indexOf(domain) === -1) wl.push(domain);
+        return addAllowRule(domain).then(function() {
+          return chrome.storage.local.set({ whitelist: wl });
+        }).then(function() { sendResponse({ success: true, whitelisted: true }); });
+      } else {
+        wl = wl.filter(function(d) { return d !== domain; });
+        return removeAllowRule(domain).then(function() {
+          return chrome.storage.local.set({ whitelist: wl });
+        }).then(function() { sendResponse({ success: true, whitelisted: false }); });
+      }
+    }).catch(function(e) { sendResponse({ success: false, error: e.message }); });
+    return true;
+  }
+
+  // ── toggleProtection ──────────────────────────────────────────────────
+  if (msg.action === 'toggleProtection') {
+    var rulesets = ['ad_networks', 'trackers', 'malware', 'annoyances'];
+    var opts = msg.enabled
+      ? { enableRulesetIds: rulesets, disableRulesetIds: [] }
+      : { enableRulesetIds: [], disableRulesetIds: rulesets };
+    chrome.declarativeNetRequest.updateEnabledRulesets(opts).then(function() {
+      sendResponse({ success: true });
+    }).catch(function(e) { sendResponse({ success: false, error: e.message }); });
+    return true;
+  }
+
+  // ── resetStats ────────────────────────────────────────────────────────
+  if (msg.action === 'resetStats') {
+    totalBlockedAllTime = 0;
+    tabStats.clear();
+    chrome.storage.local.set({ totalBlocked: 0 }).catch(function() {});
+    chrome.storage.session.set({ tabStats: {}, lastPollTime: Date.now() }).catch(function() {});
+    refreshAllBadges();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // ── getProtectionStatus ───────────────────────────────────────────────
+  if (msg.action === 'getProtectionStatus') {
+    chrome.declarativeNetRequest.getEnabledRulesets().then(function(rulesets) {
+      sendResponse({ enabled: rulesets.length > 0 });
+    }).catch(function() { sendResponse({ enabled: true }); });
+    return true;
+  }
+
+  return false;
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  10. KEYBOARD COMMANDS
+//      toggle-retro: Ctrl+Shift+E — send message to active tab
+// ══════════════════════════════════════════════════════════════════════════
+if (chrome.commands && chrome.commands.onCommand) {
+  chrome.commands.onCommand.addListener(function(command) {
+    if (command === 'toggle-retro') {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(function(tabs) {
+        if (tabs && tabs[0] && tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleRetroMode' }).catch(function() {});
+        }
+      }).catch(function() {});
+    }
+  });
+}

@@ -14,7 +14,9 @@ importScripts(
   '../engine/scriptlet-engine.js',
   '../engine/scriptlet-registry.js',
   '../engine/network-logger.js',
-  '../engine/dynamic-filtering.js'
+  '../engine/dynamic-filtering.js',
+  '../engine/redirect-adapter.js',
+  '../engine/adnauseam-adapter.js'
 );
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -110,6 +112,16 @@ function initFilterSystem(isFirstInstall) {
     UBDynamicFiltering.init().then(function() {
       console.log('[UltraBlock] Dynamic filtering initialized');
     });
+  }
+
+  // Initialize redirect engine
+  if (typeof UBRedirectEngine !== 'undefined') {
+    UBRedirectEngine.init();
+  }
+
+  // Initialize AdNauseam adapter (off by default, user opts in)
+  if (typeof UBAdNauseam !== 'undefined') {
+    UBAdNauseam.init();
   }
 
   UBListManager.init().then(function() {
@@ -653,6 +665,65 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
   if (msg.action === 'clearNetworkLog') {
     UBNetworkLogger.clear();
     sendResponse({ success: true });
+    return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  REDIRECT ENGINE
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'getRedirectResources') {
+    var resources = (typeof UBRedirectEngine !== 'undefined') ? UBRedirectEngine.getAllResources() : [];
+    sendResponse({ resources: resources });
+    return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  ADNAUSEAM (Click Obfuscation)
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'toggleAdNauseam') {
+    if (typeof UBAdNauseam === 'undefined') { sendResponse({ success: false }); return false; }
+    if (msg.enabled) { UBAdNauseam.enable(); } else { UBAdNauseam.disable(); }
+    sendResponse({ success: true, enabled: UBAdNauseam.isEnabled() });
+    return false;
+  }
+
+  if (msg.action === 'getAdNauseamStatus') {
+    if (typeof UBAdNauseam === 'undefined') { sendResponse({ enabled: false }); return false; }
+    sendResponse({ enabled: UBAdNauseam.isEnabled() });
+    return false;
+  }
+
+  if (msg.action === 'getAdVault') {
+    if (typeof UBAdNauseam === 'undefined') { sendResponse({ ads: [], stats: {} }); return false; }
+    sendResponse(UBAdNauseam.getVault());
+    return false;
+  }
+
+  if (msg.action === 'clearAdVault') {
+    if (typeof UBAdNauseam !== 'undefined') UBAdNauseam.clearVault();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (msg.action === 'reportAd') {
+    if (typeof UBAdNauseam !== 'undefined') UBAdNauseam.reportAd(msg.ad);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  LOGGER UI DATA
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (msg.action === 'getLoggerUI') {
+    var logData = {
+      enabled: (typeof UBNetworkLogger !== 'undefined') ? UBNetworkLogger.isEnabled() : false,
+      entries: (typeof UBNetworkLogger !== 'undefined') ? UBNetworkLogger.getEntries(msg.filter) : [],
+      stats: (typeof UBNetworkLogger !== 'undefined') ? UBNetworkLogger.getStats() : {},
+    };
+    sendResponse(logData);
     return false;
   }
 

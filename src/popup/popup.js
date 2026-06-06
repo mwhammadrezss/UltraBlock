@@ -120,4 +120,49 @@
     }).catch(function () { siteBtn.disabled = false; });
   });
 
+  // ── Tool buttons ──────────────────────────────────────────────────────
+  var btnLogger = document.getElementById('btnLogger');
+  var btnPicker = document.getElementById('btnPicker');
+  var btnVault  = document.getElementById('btnVault');
+
+  if (btnLogger) {
+    btnLogger.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/logger.html') });
+    });
+  }
+
+  if (btnPicker) {
+    btnPicker.addEventListener('click', function () {
+      sendMsg({ action: 'activateElementPicker' }).catch(function () {});
+      window.close();
+    });
+  }
+
+  if (btnVault) {
+    btnVault.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/adnauseam.html') });
+    });
+  }
+
+  // ── Filter list info ──────────────────────────────────────────────────
+  var filterCount   = document.getElementById('filterCount');
+  var filterUpdated = document.getElementById('filterUpdated');
+
+  if (filterCount && filterUpdated) {
+    sendMsg({ action: 'getFilterLists' }).then(function (data) {
+      if (!data) return;
+      filterCount.textContent = (data.compiledRuleCount || 0).toLocaleString();
+      var lists = data.lists || [];
+      if (lists.length > 0) {
+        var latest = Math.max.apply(null, lists.map(function (l) { return l.lastUpdated || 0; }));
+        if (latest > 0) {
+          var ago = Date.now() - latest;
+          if (ago < 3600000) filterUpdated.textContent = Math.round(ago / 60000) + 'm ago';
+          else if (ago < 86400000) filterUpdated.textContent = Math.round(ago / 3600000) + 'h ago';
+          else filterUpdated.textContent = Math.round(ago / 86400000) + 'd ago';
+        }
+      }
+    }).catch(function () {});
+  }
+
 })();

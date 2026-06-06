@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UltraBlock — Ad Vault (AdNauseam)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f1117;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      padding: 0;
+    }
+
+    .header {
+      background: #161b27;
+      border-bottom: 1px solid #1e2332;
+      padding: 20px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+    .header .subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .header .toggle-area { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .header button {
+      background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      color: #94a3b8; padding: 8px 16px; font-size: 13px; cursor: pointer;
+    }
+    .header button:hover { background: #334155; color: #e2e8f0; }
+    .header button.active { background: #22c55e; color: #fff; border-color: #16a34a; }
+    .header button.danger { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 12px; padding: 20px 24px;
+      border-bottom: 1px solid #1e2332;
+    }
+    .stat-box {
+      background: #161b27; border: 1px solid #1e2332; border-radius: 10px;
+      padding: 16px; text-align: center;
+    }
+    .stat-box .value { font-size: 28px; font-weight: 700; color: #38bdf8; }
+    .stat-box .label { font-size: 11px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-box.drain .value { color: #f97316; }
+    .stat-box.clicked .value { color: #a78bfa; }
+
+    .vault-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      padding: 20px 24px;
+    }
+    .ad-card {
+      background: #161b27;
+      border: 1px solid #1e2332;
+      border-radius: 8px;
+      padding: 14px;
+      transition: border-color 0.2s;
+    }
+    .ad-card:hover { border-color: #334155; }
+    .ad-card .ad-title {
+      font-size: 13px; font-weight: 600; color: #cbd5e1;
+      margin-bottom: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ad-card .ad-url {
+      font-size: 11px; color: #475569;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 8px;
+    }
+    .ad-card .ad-meta {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; color: #64748b;
+    }
+    .ad-card .ad-status {
+      display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-size: 10px; font-weight: 600;
+    }
+    .ad-card .ad-status.clicked { background: #14532d; color: #86efac; }
+    .ad-card .ad-status.pending { background: #1e293b; color: #94a3b8; }
+    .ad-card .ad-page {
+      font-size: 10px; color: #334155; margin-top: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .empty-state {
+      text-align: center; padding: 80px 24px; color: #475569;
+    }
+    .empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+    .empty-state p { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>🎭 Ad Vault</h1>
+      <div class="subtitle">AdNauseam — Click obfuscation & budget drain</div>
+    </div>
+    <div class="toggle-area">
+      <button id="toggleBtn">Enable</button>
+      <button id="clearBtn" class="danger">Clear Vault</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="value" id="totalFound">0</div>
+      <div class="label">Ads Found</div>
+    </div>
+    <div class="stat-box clicked">
+      <div class="value" id="totalClicked">0</div>
+      <div class="label">Ads Clicked</div>
+    </div>
+    <div class="stat-box drain">
+      <div class="value" id="estimatedDrain">$0</div>
+      <div class="label">Est. Budget Drained</div>
+    </div>
+    <div class="stat-box">
+      <div class="value" id="vaultSize">0</div>
+      <div class="label">In Vault</div>
+    </div>
+  </div>
+
+  <div class="vault-grid" id="vaultGrid"></div>
+  <div class="empty-state" id="emptyState">
+    <div class="icon">🎯</div>
+    <p>No ads collected yet.</p>
+    <p style="margin-top:8px; font-size:12px; color:#334155">Enable AdNauseam and browse the web to start collecting ads.</p>
+  </div>
+
+  <script>
+  'use strict';
+  (function () {
+    var toggleBtn = document.getElementById('toggleBtn');
+    var clearBtn = document.getElementById('clearBtn');
+    var vaultGrid = document.getElementById('vaultGrid');
+    var emptyState = document.getElementById('emptyState');
+
+    function sendMsg(msg) {
+      return new Promise(function (resolve) {
+        chrome.runtime.sendMessage(msg, function (resp) { resolve(resp); });
+      });
+    }
+
+    function formatMoney(cents) {
+      if (cents >= 100) return '$' + (cents / 100).toFixed(2);
+      return cents + '¢';
+    }
+
+    function formatDate(ts) {
+      if (!ts) return '';
+      var d = new Date(ts);
+      return d.toLocaleDateString() + ' ' + d.toTimeString().substring(0, 5);
+    }
+
+    function renderVault(data) {
+      var stats = data.stats || {};
+      document.getElementById('totalFound').textContent = stats.totalFound || 0;
+      document.getElementById('totalClicked').textContent = stats.totalClicked || 0;
+      document.getElementById('estimatedDrain').textContent = formatMoney(stats.estimatedDrain || 0);
+      document.getElementById('vaultSize').textContent = stats.vaultSize || 0;
+
+      var ads = data.ads || [];
+      if (ads.length === 0) {
+        emptyState.style.display = 'block';
+        vaultGrid.innerHTML = '';
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      // Show newest first
+      var html = '';
+      for (var i = ads.length - 1; i >= 0; i--) {
+        var ad = ads[i];
+        var statusClass = ad.clicked ? 'clicked' : 'pending';
+        var statusText = ad.clicked ? '✓ Clicked' : '⏳ Pending';
+        html += '<div class="ad-card">' +
+          '<div class="ad-title" title="' + (ad.title || '') + '">' + (ad.title || 'Unknown Ad') + '</div>' +
+          '<div class="ad-url" title="' + (ad.url || '') + '">' + (ad.url || '-') + '</div>' +
+          '<div class="ad-meta">' +
+            '<span class="ad-status ' + statusClass + '">' + statusText + '</span>' +
+            '<span>' + formatDate(ad.found) + '</span>' +
+          '</div>' +
+          '<div class="ad-page" title="' + (ad.page || '') + '">📄 ' + (ad.domain || '') + '</div>' +
+        '</div>';
+      }
+      vaultGrid.innerHTML = html;
+    }
+
+    function updateToggle(enabled) {
+      if (enabled) {
+        toggleBtn.textContent = '✓ Enabled';
+        toggleBtn.classList.add('active');
+      } else {
+        toggleBtn.textContent = 'Enable';
+        toggleBtn.classList.remove('active');
+      }
+    }
+
+    function refresh() {
+      sendMsg({ action: 'getAdVault' }).then(renderVault);
+      sendMsg({ action: 'getAdNauseamStatus' }).then(function (r) {
+        updateToggle(r && r.enabled);
+      });
+    }
+
+    refresh();
+    setInterval(refresh, 3000);
+
+    toggleBtn.addEventListener('click', function () {
+      var isActive = toggleBtn.classList.contains('active');
+      sendMsg({ action: 'toggleAdNauseam', enabled: !isActive }).then(function (r) {
+        updateToggle(r && r.enabled);
+      });
+    });
+
+    clearBtn.addEventListener('click', function () {
+      if (confirm('Clear all collected ads from the vault?')) {
+        sendMsg({ action: 'clearAdVault' }).then(refresh);
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -144,6 +144,39 @@
     });
   }
 
+  // ── Page navigation buttons ───────────────────────────────────────────
+  var btnStats = document.getElementById('btnStats');
+  var btnFilters = document.getElementById('btnFilters');
+  var btnProfiles = document.getElementById('btnProfiles');
+  var btnSiteSwitches = document.getElementById('btnSiteSwitches');
+
+  if (btnStats) {
+    btnStats.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/statistics.html') });
+    });
+  }
+  if (btnFilters) {
+    btnFilters.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/filters.html') });
+    });
+  }
+  if (btnProfiles) {
+    btnProfiles.addEventListener('click', function () {
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/profiles.html') });
+    });
+  }
+  if (btnSiteSwitches) {
+    btnSiteSwitches.addEventListener('click', function () {
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        var domain = '';
+        if (tabs[0] && tabs[0].url) {
+          try { domain = new URL(tabs[0].url).hostname; } catch (_) {}
+        }
+        chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/site-switches.html') + '?domain=' + encodeURIComponent(domain) });
+      });
+    });
+  }
+
   // ── Filter list info ──────────────────────────────────────────────────
   var filterCount   = document.getElementById('filterCount');
   var filterUpdated = document.getElementById('filterUpdated');
